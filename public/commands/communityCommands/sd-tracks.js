@@ -17,7 +17,6 @@ const statAsync = promisify(fs.stat);
 const stream = require("stream");
 const pipeline = promisify(stream.pipeline);
 
-eval(fs.readFileSync("./public/tournament/tournamentutils.js") + "");
 eval(fs.readFileSync("./public/imageprocessing/imagebuilder.js") + "");
 
 let mainVgmData = [];

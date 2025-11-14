@@ -4,10 +4,6 @@ const { Client, RichEmbed } = require("discord.js");
 const sleep = require("util").promisify(setTimeout);
 const Discord = require("discord.js");
 
-//var FileSync = require("lowdb/adapters/FileSync");
-//var adapter = new FileSync(".data/db.json");
-//var low = require("lowdb");
-//var db = low(adapter);
 
 function returnDuplicateEntries(entries) {
   var duplicates = entries.reduce(function (acc, el, i, arr) {

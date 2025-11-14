@@ -12,12 +12,7 @@ const {
 } = require("discord.js");
 
 const Discord = require("discord.js");
-const {
-  createAudioPlayer,
-  createAudioResource,
-  AudioPlayerStatus,
-} = require("@discordjs/voice");
-const ytdl = require("ytdl-core");
+
 const csvParser = require("csv-parser");
 const fs = require("fs");
 const sleep = require("util").promisify(setTimeout);
@@ -28,24 +23,11 @@ eval(fs.readFileSync("./public/utils/messageutils.js") + "");
 const nodefs = require("node:fs");
 const path = require("node:path");
 
-const QueueManager = require(path.join(
-  require.main.path,
-  "public",
-  "ytPlayback",
-  "queueManager"
-));
-
 var FileSync = require("lowdb/adapters/FileSync");
 var adapter = new FileSync(".data/db.json");
 var low = require("lowdb");
 var db = new low(adapter);
 var botAccess;
-
-//runningTournament.updateScore(32, 40);
-//runningTournament.updateScore(25, 21);
-
-//runningTournament.checkMatch();
-//runningTournament.checkMatch();
 
 DbDefaultSetup(db);
 function GetDb() {
@@ -56,9 +38,6 @@ function refreshDb() {
   //db.read()
   console.log("Db's reloaded");
 }
-
-// If we want to pass this around, it needs to be in an object to pass the value by refernce, otherwise, it's just copied
-global.userAlbumResults = new Map();
 
 function CreateBot() {
   const intents = [
@@ -88,61 +67,18 @@ function CreateBot() {
     //Set bot card information
     bot.user.setPresence({
       activities: [{ name: "VGM!", type: ActivityType.Listening }],
-      status: "Downloading ALL THE INTERNET!",
+      status: "Rating your ratings",
     });
     console.log("This bot is active!");
     // Set check chron here
   });
   botAccess = bot;
-  sendDailyEmbed.start();
-  //sendAprilFools.start();
-  //checkTournamentBattleReactions.start();
-  //checkTournamentBattleReactions2.start();
   return bot;
 }
 
 function GetBot() {
   return botAccess;
 }
-
-let sendAprilFools = new cron.CronJob("00 00 19 * * 1-5", async () => {
-  CreateAprilFools();
-  //await StartMatch("", GetBot(), true);
-});
-
-let sendDailyEmbed = new cron.CronJob("00 25 10 * * 1-5", async () => {
-  var previousMatches = "";
-  let guildObject = await bot.guilds.cache.get(process.env.GUILD_ID);
-  previousMatches = await EndMatches();
-
-  var db = GetDb();
-  db.read();
-
-  let currentTournamentName = await getCurrentTournament(db);
-  let tournamentDetails = await db.get("tournaments").nth(0).value();
-
-  if (tournamentDetails.currentTournament == "N/A") {
-    console.log(
-      "There doesn't appear to be a tournament running at this time."
-    );
-    return;
-  }
-  let tournamentName = await db.get("tournaments[0].currentTournament").value();
-  console.log(tournamentName);
-  let tournamentDb = await tournamentDetails[tournamentName];
-
-  // Challonge stuff
-  const urlName = replaceSpacesWithUnderlines(currentTournamentName);
-
-  await sleep(1000);
-
-  console.log("Finished with previous Matches");
-  //await SendPreviousSingleDayResultsEmbeds(guildObject, previousMatches, []);
-  await StartMatch("", GetBot(), false, previousMatches);
-  // 30 Seconds to be safe
-  await sleep(30000);
-  await StartMatch("", GetBot(), true);
-});
 
 function SetupEvents(bot) {
   const eventsPath = path.join(__dirname, "public", "events");

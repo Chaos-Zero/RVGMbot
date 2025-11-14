@@ -2,7 +2,7 @@ const fetch = require("node-fetch");
 const fs = require("fs").promises;
 const path = require("path");
 
-const outputDir = path.join(__dirname, "public", "utils", "sdArchiveData");
+const outputDir = path.join(__dirname, "public", "utils", "archiveData");
 
 const sheets = [
   {

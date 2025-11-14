@@ -1,13 +1,3 @@
-// server.js
-// where your node app starts
-
-//FFMPG imports fop package.json (not using currently)
-
-    //"fluent-ffmpeg": "^2.1.2",
-    //"ffmpeg-static": "^5.2.0",
-
-// we've started you off with Express (https://expressjs.com/)
-// but feel free to use whatever libraries or frameworks you'd like through `package.json`.
 require('dotenv').config()
 const express = require("express");
 const session = require("express-session");
@@ -21,7 +11,6 @@ const sleep = require("util").promisify(setTimeout);
 
 eval(fs.readFileSync("./public/main.js") + "");
 eval(fs.readFileSync("./public/utils/messageutils.js") + "");
-eval(fs.readFileSync("./public/ytPlayback/ytDmMessages.js") + "");
 
 const app = express();
 
