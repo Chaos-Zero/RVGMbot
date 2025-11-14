@@ -23,7 +23,7 @@ let mainVgmData = [];
 let locationVgmData = [];
 
 // Load the main CSV and filter out empty rows
-fs.createReadStream("./public/utils/sdArchiveData/mainSheetData.csv")
+fs.createReadStream("./public/utils/archiveData/mainSheetData.csv")
   .pipe(csv())
   .on("data", (row) => {
     if (row["Game Title"]) {
@@ -39,7 +39,7 @@ fs.createReadStream("./public/utils/sdArchiveData/mainSheetData.csv")
   });
 
 // Load the location CSV
-fs.createReadStream("./public/utils/sdArchiveData/locationSheetData.csv")
+fs.createReadStream("./public/utils/archiveData/locationSheetData.csv")
   .pipe(csv())
   .on("data", (row) => {
     const lowerCaseRow = {};

@@ -71,20 +71,26 @@ jobs:
             [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
 
             if [ "$NEED_INSTALL" -eq 1 ]; then
+              echo "→ Installing deps with npm (manifest: $MANIFEST)"
               if [ -f package-lock.json ]; then
-                timeout 15m npm ci --omit=dev --no-audit --no-fund
+                # temporarily disable -e so we can capture npm's status
+                set +e
+                npm ci --omit=dev --no-audit --no-fund
+                NPM_STATUS=$?
+                set -e
               else
-                timeout 15m npm i  --omit=dev --no-audit --no-fund
+                set +e
+                npm i --omit=dev --no-audit --no-fund
+                NPM_STATUS=$?
+                set -e
               fi
+
+              if [ "$NPM_STATUS" -ne 0 ]; then
+                echo "[error] npm install failed with status $NPM_STATUS" >&2
+                exit $NPM_STATUS
+              fi
+
               echo "$CUR_HASH" > .last_deps_hash
             else
               echo "→ No dependency changes detected; skipping npm install"
             fi
-
-            echo "[5/6] Reload PM2 process"
-            pm2 reload "$PROC" || pm2 start /home/botuser/ecosystem.config.js --only "$PROC" --update-env
-            pm2 save
-
-            echo "[6/6] PM2 status"
-            pm2 list
-
