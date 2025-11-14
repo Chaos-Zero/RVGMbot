@@ -7,8 +7,6 @@ const http = require("http");
 const https = require("https");
 const Stream = require("stream").Transform;
 
-eval(fs.readFileSync("./public/tournament/tournamentutils.js") + "");
-
 var request = require("request");
 
 const readdirAsync = promisify(readdir);
@@ -134,4 +132,23 @@ async function copyFileWithoutExtension(
       }
     })
   );
+}
+
+function extractYoutubeVideoID(url) {
+  // Regular expression to match various YouTube URL formats
+  var regExp =
+    /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  var match = url.match(regExp);
+
+  if (match && match[2].length === 11) {
+    // The video ID is the second group in the match
+    return match[2];
+  } else {
+    // Return null if no valid ID is found
+    return "zero";
+  }
+}
+
+function replaceSpacesWithUnderlines(str) {
+  return str.replace(/ /g, "_");
 }
