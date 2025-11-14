@@ -26,65 +26,65 @@ jobs:
             set -euo pipefail
 
             APP_DIR="/home/botuser/bots/RVGM-live"
-            REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git"   # <-- change
+            REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git" 
             BRANCH="master"
             PROC="rvgm-live"
 
-            echo "[1/6] Ensure app dir exists"
-            mkdir -p "$APP_DIR"
-            cd "$APP_DIR"
+            PARENT_DIR="$(dirname "$APP_DIR")"
 
-            echo "[2/6] Ensure repo present on $BRANCH"
-            if [ ! -d .git ]; then
-              echo "Cloning fresh..."
+            echo "[1/6] Ensure parent dir exists"
+            mkdir -p "$PARENT_DIR"
+
+            echo "[2/6] Ensure repo present on $BRANCH (without nuking cwd)"
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "→ Fresh clone to $APP_DIR"
               rm -rf "$APP_DIR"
-              git clone "$REPO_URL" "$APP_DIR"
-              cd "$APP_DIR"
+              git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$APP_DIR"
             fi
 
+            cd "$APP_DIR"
+
+            echo "[3/6] Sync to origin/$BRANCH"
             git fetch --all --prune
-            git checkout "$BRANCH" || git checkout -b "$BRANCH"
+            # ensure we are on the right branch locally
+            if ! git rev-parse --abbrev-ref HEAD | grep -qx "$BRANCH"; then
+              git checkout -B "$BRANCH"
+            fi
             git reset --hard "origin/$BRANCH"
 
-            echo "[3/6] Harden npm + timeouts"
+            echo "[4/6] Install deps (skip if unchanged)"
             npm config set fund false
             npm config set audit false
             npm config set progress false
             npm config set fetch-timeout 120000
             npm config set fetch-retries 2
             npm config set fetch-retry-maxtimeout 240000
-            export CI=true
-            export NO_UPDATE_NOTIFIER=1
+            export CI=true NO_UPDATE_NOTIFIER=1
 
-            echo "[4/6] Install dependencies (skip if unchanged)"
             MANIFEST="package-lock.json"
-            if [ ! -f package-lock.json ]; then MANIFEST="package.json"; fi
+            [ -f package-lock.json ] || MANIFEST="package.json"
             CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
             LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo '')"
 
-            if [ ! -d node_modules ]; then
-              echo "→ node_modules missing; will install"
-              NEED_INSTALL=1
-            elif [ "$CUR_HASH" != "$LAST_HASH" ]; then
-              echo "→ Dependency manifest changed; will install"
-              NEED_INSTALL=1
-            else
-              NEED_INSTALL=0
-              echo "→ No dependency changes detected; skipping npm install"
-            fi
+            NEED_INSTALL=0
+            [ ! -d node_modules ] && NEED_INSTALL=1
+            [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
 
             if [ "$NEED_INSTALL" -eq 1 ]; then
               if [ -f package-lock.json ]; then
                 timeout 15m npm ci --omit=dev --no-audit --no-fund
               else
-                timeout 15m npm i --omit=dev --no-audit --no-fund
+                timeout 15m npm i  --omit=dev --no-audit --no-fund
               fi
               echo "$CUR_HASH" > .last_deps_hash
+            else
+              echo "→ No dependency changes detected; skipping npm install"
             fi
 
-            echo "[5/6] Reload PM2"
+            echo "[5/6] Reload PM2 process"
             pm2 reload "$PROC" || pm2 start /home/botuser/ecosystem.config.js --only "$PROC" --update-env
             pm2 save
 
-            echo "[6/6] Show PM2 status"
+            echo "[6/6] PM2 status"
             pm2 list
+
