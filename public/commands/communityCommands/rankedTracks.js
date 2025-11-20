@@ -253,7 +253,7 @@ function buildEmbedForTrack(track) {
   embed.setFooter({
     text: footerText,
     iconURL:
-      "https://cdn.glitch.global/485febab-53bf-46f2-9ec1-a3c597dfaebe/sd-img.jpeg?v=1676586931016",
+      "https://media.tenor.com/idS-Mx-F43QAAAAi/kirby-dancing.gif",
   });
 
   return embed;
