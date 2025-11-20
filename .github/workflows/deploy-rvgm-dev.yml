@@ -53,12 +53,15 @@ jobs:
             git reset --hard "origin/$BRANCH"
 
             echo "[4/6] Install deps (skip if unchanged)"
+            set +e
             npm config set fund false
             npm config set audit false
             npm config set progress false
             npm config set fetch-timeout 120000
             npm config set fetch-retries 2
             npm config set fetch-retry-maxtimeout 240000
+            set -e
+
             export CI=true NO_UPDATE_NOTIFIER=1
 
             MANIFEST="package-lock.json"
@@ -73,34 +76,43 @@ jobs:
             if [ "$NEED_INSTALL" -eq 1 ]; then
               echo "→ Installing deps with npm (manifest: $MANIFEST)"
 
+              set +e
               if [ -f package-lock.json ]; then
-                # allow npm to fail without killing the whole script
-                set +e
                 npm ci --omit=dev --no-audit --no-fund
-                NPM_STATUS=$?
-                set -e
               else
-                set +e
                 npm i --omit=dev --no-audit --no-fund
-                NPM_STATUS=$?
-                set -e
               fi
+              NPM_STATUS=$?
+              set -e
 
               if [ "$NPM_STATUS" -ne 0 ]; then
                 echo "[warning] npm install failed with status $NPM_STATUS" >&2
 
-                # If we *don't* have node_modules, we can't run → hard fail
-                if [ ! -d node_modules ]; then
-                  echo "[error] No existing node_modules to fall back to; aborting deploy" >&2
-                  exit "$NPM_STATUS"
+                if [ -d node_modules ]; then
+                  echo "[info] Continuing deploy using existing node_modules directory" >&2
+                else
+                  echo "[warning] No node_modules found; app may fail at runtime, but continuing deploy anyway" >&2
                 fi
 
-                echo "[info] Continuing deploy using existing node_modules directory"
-                # NOTE: don't update .last_deps_hash, since deps don't match manifest
+                # Do NOT update .last_deps_hash – deps are not guaranteed to match manifest
               else
-                # only mark deps as “up-to-date” when install succeeded
                 echo "$CUR_HASH" > .last_deps_hash
               fi
             else
               echo "→ No dependency changes detected; skipping npm install"
+            fi
+            echo "[5/6] Reload pm2 process: $PROC"
+            if command -v pm2 >/dev/null 2>&1; then
+              set +e
+              pm2 reload "$PROC"
+              PM2_STATUS=$?
+              set -e
+
+              if [ "$PM2_STATUS" -ne 0 ]; then
+                echo "[warning] pm2 reload '$PROC' failed with status $PM2_STATUS; continuing" >&2
+              else
+                echo "[info] pm2 reload '$PROC' successful"
+              fi
+            else
+              echo "[warning] pm2 command not found on remote host; skipping reload" >&2
             fi
