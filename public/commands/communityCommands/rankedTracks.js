@@ -467,6 +467,7 @@ async function paginateSeriesResults(
 
 // Loads and parses CSV safely
 function loadTracksFromCsv(filePath) {
+  console.log(`Loading ranked tracks from CSV at: ${filePath}`);
   const csvData = fs.readFileSync(filePath, "utf8");
   const { data, errors, meta } = Papa.parse(csvData, {
     header: true,
