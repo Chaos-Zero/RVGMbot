@@ -209,7 +209,7 @@ function buildEmbedForTrack(track) {
     .setTitle(title)
     .setURL(track["URL"] || null)
     .setAuthor({
-      name: "Submission #" + track["Number"] || "???",
+      name: "Submission #" + track["ID"] || "???",
       iconURL: "https://cdn.discordapp.com/attachments/1432140713306488974/1439057572039495720/Bot_icon2.png?ex=691f110d&is=691dbf8d&hm=42bb22bb0963dc5067e38532eb7fe7078c7f92b776867720277888a89963053d&",
     });
 
@@ -490,6 +490,6 @@ function loadTracksFromCsv(filePath) {
   }
 
   return data.filter(
-    (row) => row["Game"] && row["Song"] && row["URL"]
+    (row) => row["Source"] && row["Song"] && row["URL"]
   );
 }
