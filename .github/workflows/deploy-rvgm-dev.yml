@@ -102,9 +102,11 @@ jobs:
               echo "→ No dependency changes detected; skipping npm install"
             fi
             echo "[5/6] Reload pm2 process: $PROC"
-            if command -v pm2 >/dev/null 2>&1; then
+            PM2_BIN="/usr/bin/pm2"
+
+            if [ -x "$PM2_BIN" ]; then
               set +e
-              pm2 reload "$PROC"
+              "$PM2_BIN" reload "$PROC"
               PM2_STATUS=$?
               set -e
 
@@ -114,5 +116,6 @@ jobs:
                 echo "[info] pm2 reload '$PROC' successful"
               fi
             else
-              echo "[warning] pm2 command not found on remote host; skipping reload" >&2
+              echo "[warning] pm2 binary not found at $PM2_BIN; skipping reload" >&2
             fi
+
