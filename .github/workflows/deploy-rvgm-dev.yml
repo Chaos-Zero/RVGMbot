@@ -86,7 +86,7 @@ jobs:
               fi
 
               if [ "$NPM_STATUS" -ne 0 ]; then
-                echo "[error] npm install failed with status $NPM_STATUS" >&2
+                echo "[warning] npm install failed with status $NPM_STATUS" >&2
                 exit $NPM_STATUS
               fi
 
