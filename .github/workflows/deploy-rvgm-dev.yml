@@ -23,140 +23,130 @@ jobs:
           script_stop: true
           command_timeout: 30m
           script: |
-            - name: Deploy over SSH
-              uses: appleboy/ssh-action@v1.0.3
-              with:
-                host: ${{ secrets.SSH_HOST }}
-                port: ${{ secrets.SSH_PORT }}
-                username: ${{ secrets.SSH_USER }}
-                key: ${{ secrets.SSH_KEY }}
-                script_stop: true
-                command_timeout: 30m
-                script: |
-                  # Be strict about undefined variables, but don't auto-exit on errors
-                  set -u
+            # Be strict about undefined variables, but don't auto-exit on errors
+            set -u
 
-                  APP_DIR="/home/botuser/bots/RVGM-dev"
-                  REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git"
-                  BRANCH="dev"
-                  PROC="rvgm-dev"
+            APP_DIR="/home/botuser/bots/RVGM-dev"
+            REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git"
+            BRANCH="dev"
+            PROC="rvgm-dev"
 
-                  PARENT_DIR="$(dirname "$APP_DIR")"
+            PARENT_DIR="$(dirname "$APP_DIR")"
 
-                  echo "[1/6] Ensure parent dir exists"
-                  mkdir -p "$PARENT_DIR"
+            echo "[1/6] Ensure parent dir exists"
+            mkdir -p "$PARENT_DIR"
 
-                  echo "[2/6] Ensure repo present on $BRANCH (without nuking cwd)"
-                  if [ ! -d "$APP_DIR/.git" ]; then
-                    echo "→ Fresh clone to $APP_DIR"
-                    rm -rf "$APP_DIR"
-                    git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$APP_DIR" || {
-                      echo "[error] git clone failed; deploy may be incomplete" >&2
-                    }
-                  fi
+            echo "[2/6] Ensure repo present on $BRANCH (without nuking cwd)"
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "→ Fresh clone to $APP_DIR"
+              rm -rf "$APP_DIR"
+              git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$APP_DIR" || {
+                echo "[error] git clone failed; deploy may be incomplete" >&2
+              }
+            fi
 
-                  cd "$APP_DIR" || {
-                    echo "[error] Could not cd to $APP_DIR; aborting script" >&2
-                    exit 0
-                  }
+            cd "$APP_DIR" || {
+              echo "[error] Could not cd to $APP_DIR; aborting script" >&2
+              exit 0
+            }
 
-                  echo "[3/6] Sync to origin/$BRANCH"
-                  git fetch --all --prune || echo "[warning] git fetch failed; using existing checkout" >&2
+            echo "[3/6] Sync to origin/$BRANCH"
+            git fetch --all --prune || echo "[warning] git fetch failed; using existing checkout" >&2
 
-                  # ensure we are on the right branch locally
-                  if ! git rev-parse --abbrev-ref HEAD | grep -qx "$BRANCH"; then
-                    git checkout -B "$BRANCH" || echo "[warning] git checkout -B $BRANCH failed; continuing with current branch" >&2
-                  fi
+            # ensure we are on the right branch locally
+            if ! git rev-parse --abbrev-ref HEAD | grep -qx "$BRANCH"; then
+              git checkout -B "$BRANCH" || echo "[warning] git checkout -B $BRANCH failed; continuing with current branch" >&2
+            fi
 
-                  git reset --hard "origin/$BRANCH" || echo "[warning] git reset --hard origin/$BRANCH failed; using current working tree" >&2
+            git reset --hard "origin/$BRANCH" || echo "[warning] git reset --hard origin/$BRANCH failed; using current working tree" >&2
 
-                  echo "[4/6] Install deps (skip if unchanged)"
+            echo "[4/6] Install deps (skip if unchanged)"
 
-                  # Determine manifest file
-                  MANIFEST=""
-                  if [ -f package-lock.json ]; then
-                    MANIFEST="package-lock.json"
-                  elif [ -f package.json ]; then
-                    MANIFEST="package.json"
+            # Determine manifest file
+            MANIFEST=""
+            if [ -f package-lock.json ]; then
+              MANIFEST="package-lock.json"
+            elif [ -f package.json ]; then
+              MANIFEST="package.json"
+            else
+              echo "[warning] No package-lock.json or package.json found; skipping npm install" >&2
+            fi
+
+            if [ -n "$MANIFEST" ]; then
+              # Best-effort npm config (never fail the script here)
+              npm config set fund false           >/dev/null 2>&1 || echo "[warning] npm config set fund false failed" >&2
+              npm config set audit false          >/dev/null 2>&1 || echo "[warning] npm config set audit false failed" >&2
+              npm config set progress false       >/dev/null 2>&1 || echo "[warning] npm config set progress false failed" >&2
+              npm config set fetch-timeout 120000 >/dev/null 2>&1 || echo "[warning] npm config set fetch-timeout failed" >&2
+              npm config set fetch-retries 2      >/dev/null 2>&1 || echo "[warning] npm config set fetch-retries failed" >&2
+              npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || echo "[warning] npm config set fetch-retry-maxtimeout failed" >&2
+
+              export CI=true NO_UPDATE_NOTIFIER=1
+
+              # Hash manifest to detect changes
+              CUR_HASH=""
+              if sha256sum "$MANIFEST" >/dev/null 2>&1; then
+                CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
+              else
+                echo "[warning] sha256sum on $MANIFEST failed; treating deps as changed" >&2
+              fi
+
+              LAST_HASH=""
+              if [ -f .last_deps_hash ]; then
+                LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo "")"
+              fi
+
+              NEED_INSTALL=0
+              if [ ! -d node_modules ]; then
+                NEED_INSTALL=1
+              elif [ -n "$CUR_HASH" ] && [ "$CUR_HASH" != "$LAST_HASH" ]; then
+                NEED_INSTALL=1
+              fi
+
+              if [ "$NEED_INSTALL" -eq 1 ]; then
+                echo "→ Installing deps with npm (manifest: $MANIFEST)"
+
+                if [ -f package-lock.json ]; then
+                  npm ci --omit=dev --no-audit --no-fund
+                else
+                  npm i --omit=dev --no-audit --no-fund
+                fi
+                NPM_STATUS=$?
+
+                if [ "$NPM_STATUS" -ne 0 ]; then
+                  echo "[warning] npm install failed with status $NPM_STATUS" >&2
+
+                  if [ -d node_modules ]; then
+                    echo "[info] Continuing deploy using existing node_modules directory" >&2
                   else
-                    echo "[warning] No package-lock.json or package.json found; skipping npm install" >&2
+                    echo "[warning] No node_modules found; app may fail at runtime, but continuing deploy anyway" >&2
                   fi
-
-                  if [ -n "$MANIFEST" ]; then
-                    # Best-effort npm config (never fail the script here)
-                    npm config set fund false           >/dev/null 2>&1 || echo "[warning] npm config set fund false failed" >&2
-                    npm config set audit false          >/dev/null 2>&1 || echo "[warning] npm config set audit false failed" >&2
-                    npm config set progress false       >/dev/null 2>&1 || echo "[warning] npm config set progress false failed" >&2
-                    npm config set fetch-timeout 120000 >/dev/null 2>&1 || echo "[warning] npm config set fetch-timeout failed" >&2
-                    npm config set fetch-retries 2      >/dev/null 2>&1 || echo "[warning] npm config set fetch-retries failed" >&2
-                    npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || echo "[warning] npm config set fetch-retry-maxtimeout failed" >&2
-
-                    export CI=true NO_UPDATE_NOTIFIER=1
-
-                    # Hash manifest to detect changes
-                    CUR_HASH=""
-                    if sha256sum "$MANIFEST" >/dev/null 2>&1; then
-                      CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
-                    else
-                      echo "[warning] sha256sum on $MANIFEST failed; treating deps as changed" >&2
-                    fi
-
-                    LAST_HASH=""
-                    if [ -f .last_deps_hash ]; then
-                      LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo "")"
-                    fi
-
-                    NEED_INSTALL=0
-                    if [ ! -d node_modules ]; then
-                      NEED_INSTALL=1
-                    elif [ -n "$CUR_HASH" ] && [ "$CUR_HASH" != "$LAST_HASH" ]; then
-                      NEED_INSTALL=1
-                    fi
-
-                    if [ "$NEED_INSTALL" -eq 1 ]; then
-                      echo "→ Installing deps with npm (manifest: $MANIFEST)"
-
-                      if [ -f package-lock.json ]; then
-                        npm ci --omit=dev --no-audit --no-fund
-                      else
-                        npm i --omit=dev --no-audit --no-fund
-                      fi
-                      NPM_STATUS=$?
-
-                      if [ "$NPM_STATUS" -ne 0 ]; then
-                        echo "[warning] npm install failed with status $NPM_STATUS" >&2
-
-                        if [ -d node_modules ]; then
-                          echo "[info] Continuing deploy using existing node_modules directory" >&2
-                        else
-                          echo "[warning] No node_modules found; app may fail at runtime, but continuing deploy anyway" >&2
-                        fi
-                      else
-                        # only mark deps as up-to-date when install succeeded
-                        if [ -n "$CUR_HASH" ]; then
-                          echo "$CUR_HASH" > .last_deps_hash
-                        fi
-                      fi
-                    else
-                      echo "→ No dependency changes detected; skipping npm install"
-                    fi
+                else
+                  # only mark deps as up-to-date when install succeeded
+                  if [ -n "$CUR_HASH" ]; then
+                    echo "$CUR_HASH" > .last_deps_hash
                   fi
+                fi
+              else
+                echo "→ No dependency changes detected; skipping npm install"
+              fi
+            fi
 
-                  echo "[5/6] Reload pm2 process: $PROC"
-                  PM2_BIN="/usr/bin/pm2"  # adjust if `which pm2` is different on the server
+            echo "[5/6] Reload pm2 process: $PROC"
+            PM2_BIN="/usr/bin/pm2"  # adjust if `which pm2` is different on the server
 
-                  if [ -x "$PM2_BIN" ]; then
-                    "$PM2_BIN" reload "$PROC"
-                    PM2_STATUS=$?
-                    if [ "$PM2_STATUS" -ne 0 ]; then
-                      echo "[warning] pm2 reload '$PROC' failed with status $PM2_STATUS; continuing" >&2
-                    else
-                      echo "[info] pm2 reload '$PROC' successful"
-                    fi
-                  else
-                    echo "[warning] pm2 binary not found at $PM2_BIN; skipping reload" >&2
-                  fi
+            if [ -x "$PM2_BIN" ]; then
+              "$PM2_BIN" reload "$PROC"
+              PM2_STATUS=$?
+              if [ "$PM2_STATUS" -ne 0 ]; then
+                echo "[warning] pm2 reload '$PROC' failed with status $PM2_STATUS; continuing" >&2
+              else
+                echo "[info] pm2 reload '$PROC' successful"
+              fi
+            else
+              echo "[warning] pm2 binary not found at $PM2_BIN; skipping reload" >&2
+            fi
 
-                  echo "[6/6] Deploy script complete"
-                  # Force success for the GitHub step, even if there were warnings above
-                  exit 0
+            echo "[6/6] Deploy script complete"
+            # Force success for the GitHub step, even if there were warnings above
+            exit 0
