@@ -119,9 +119,9 @@ async function handleTrackFetch(
 
     // then filter by year if requested
     if (submitter) {
-       const submitterFuse = new Fuse(allTracks, { keys: ["Nominator"], threshold: 0.2 });
-        let matches = submitter
-        ? seriesFuse.search(submitter).map((r) => r.item)
+      const submitterFuse = new Fuse(matches, { keys: ["Nominator"], threshold: 0.2 });
+      matches = submitter
+        ? submitterFuse.search(submitter).map((r) => r.item)
         : matches;
 
       if (matches.length === 0) {
@@ -159,7 +159,7 @@ async function handleTrackFetch(
   let chosenTrack = null;
   if (inputNum !== null) {
     const bvgmKey = Object.keys(allTracks[0]).find((k) =>
-      k.toLowerCase().startsWith("ID")
+      k.toLowerCase().startsWith("id")
     );
     if (!bvgmKey) {
       return await interaction.editReply({
@@ -201,11 +201,11 @@ async function handleTrackFetch(
 }
 
 // Builds the embed
-function buildEmbedForTrack(track, contributorData) {
+function buildEmbedForTrack(track) {
   const title = `${track["Source"] || "Unknown Game"} – ${track["Song"] || "Unknown Track"}`;
 
   const embed = new EmbedBuilder()
-    .setColor(parseInt("0x#FD3DB5"))
+    .setColor(parseInt("FD3DB5", 16))
     .setTitle(title)
     .setURL(track["URL"] || null)
     .setAuthor({
@@ -321,7 +321,7 @@ async function sendEmbed(
   makePublic,
   useEditReply
 ) {
-  const embed = buildEmbedForTrack(track, contributorData);
+  const embed = buildEmbedForTrack(track);
   const payload = {
     content: "", // Clear the original message content
     embeds: [embed],
@@ -490,6 +490,6 @@ function loadTracksFromCsv(filePath) {
   }
 
   return data.filter(
-    (row) => row["Game Title"] && row["Piece Title"] && row["YouTube URL"]
+    (row) => row["Game"] && row["Song"] && row["URL"]
   );
 }
