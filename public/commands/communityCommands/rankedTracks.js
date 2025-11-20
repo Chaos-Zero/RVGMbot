@@ -12,6 +12,14 @@ const Papa = require("papaparse");
 
 eval(fs.readFileSync("./public/imageprocessing/imagebuilder.js") + "");
 
+const archiveFolder = path.join(
+  __dirname,
+  "..",
+  "..",
+  "utils",
+  "archiveData"
+);
+
 module.exports = {
   data: (() => {
     return new SlashCommandBuilder()
