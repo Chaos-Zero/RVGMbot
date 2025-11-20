@@ -72,8 +72,9 @@ jobs:
 
             if [ "$NEED_INSTALL" -eq 1 ]; then
               echo "→ Installing deps with npm (manifest: $MANIFEST)"
+
               if [ -f package-lock.json ]; then
-                # temporarily disable -e so we can capture npm's status
+                # allow npm to fail without killing the whole script
                 set +e
                 npm ci --omit=dev --no-audit --no-fund
                 NPM_STATUS=$?
@@ -87,10 +88,19 @@ jobs:
 
               if [ "$NPM_STATUS" -ne 0 ]; then
                 echo "[warning] npm install failed with status $NPM_STATUS" >&2
-                exit $NPM_STATUS
-              fi
 
-              echo "$CUR_HASH" > .last_deps_hash
+                # If we *don't* have node_modules, we can't run → hard fail
+                if [ ! -d node_modules ]; then
+                  echo "[error] No existing node_modules to fall back to; aborting deploy" >&2
+                  exit "$NPM_STATUS"
+                fi
+
+                echo "[info] Continuing deploy using existing node_modules directory"
+                # NOTE: don't update .last_deps_hash, since deps don't match manifest
+              else
+                # only mark deps as “up-to-date” when install succeeded
+                echo "$CUR_HASH" > .last_deps_hash
+              fi
             else
               echo "→ No dependency changes detected; skipping npm install"
             fi
