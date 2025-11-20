@@ -7,16 +7,16 @@ const outputDir = path.join(__dirname, "public", "utils", "archiveData");
 const sheets = [
   {
     sheetId: "15_V4PDCtNERbi9j2edquN_s88pHcMTqfny4yhmV9HDA",
-    tabs: [{ gid: "0", filename: "RtVGMData.csv", removePreamble: true }],
+    tabs: [{ gid: "0", filename: "RtVGMData.csv", removePreamble: false }],
   },
   {
     sheetId: "1meEpo_8AqMfJzIt5fAc4Er8UUpgo4pp12wgGkJvEbZ4",
-    tabs: [{ gid: "1231590126", filename: "RtVGMCompatability.csv", removePreamble: true }],
+    tabs: [{ gid: "1231590126", filename: "RtVGMCompatability.csv", removePreamble: false }],
   },
   
   {
     sheetId: "1IbPjJgReM1bN3XcVLe2u7UREwvqIPdzlnqmu0WN49uM",
-    tabs: [{ gid: "1748394076", filename: "RtVGMPrevious.csv", removePreamble: true }],
+    tabs: [{ gid: "1748394076", filename: "RtVGMPrevious.csv", removePreamble: false }],
   },
 ];
 
