@@ -105,7 +105,7 @@ async function handleTrackFetch(
     if (fs.existsSync(filePath)) {
         allTracks = loadTracksFromCsv(filePath);
     }
-
+    console.log(`Loaded ${allTracks.length} ranked tracks from CSV.`);
 
   if (seriesSearch || submitter) {
     let matches = allTracks
@@ -137,7 +137,7 @@ async function handleTrackFetch(
     if (matches.length === 0) {
       return await interaction.editReply({
         content: seriesSearch
-          ? `No results found for series "${seriesSearch} with selected options".`
+          ? `No results found for series "${seriesSearch}" with selected options".`
           : "Could not find any tracks with selected options.",
         embeds: [],
         compontens: [],
