@@ -23,18 +23,16 @@ const sheets = [
 const MAX_CONCURRENT_DOWNLOADS = 10;
 
 async function PopulateVgmLinks() {
-    const vgmUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&id=${sheet.sheetId}&gid=${tab.gid}`;
-  const vgmPath = path.join(outputDir, "mainSheetData.csv");
+   for (const sheet of sheets) {
+    for (const tab of sheet.tabs) {
+      const url = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&id=${sheet.sheetId}&gid=${tab.gid}`;
+      const filePath = path.join(outputDir, tab.filename);
+      const file = await fetchAndSaveCSV(url, filePath, tab.removePreamble);
 
-  const vgmFile = await fetchAndSaveCSV(
-    vgmUrl,
-    vgmPath,
-    false
-  );
-
-  if (!vgmFile) {
-    console.error("Failed to fetch Vgm main page.");
-    return;
+      if (!file) {
+        console.error(`Failed to fetch and save ${tab.filename}`);
+      }
+    }
   }
 
   // 3. Parse Vgm.csv, download series, and create JSON map
