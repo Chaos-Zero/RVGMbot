@@ -34,11 +34,6 @@ async function PopulateVgmLinks() {
       }
     }
   }
-
-  // 3. Parse Vgm.csv, download series, and create JSON map
-  await downloadAllSeriesCsvsThrottled(vgmPath);
-
-  console.log("All CSV files downloaded and saved.");
 }
 
 async function fetchAndSaveCSV(url, filePath, removePreamble) {
