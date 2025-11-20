@@ -19,7 +19,7 @@ const bot = CreateBot();
 
 var db = GetDb();
 
-PopulateSdVgmLinks();
+PopulateVgmLinks();
 
 AddCommandsToBot(bot);
 

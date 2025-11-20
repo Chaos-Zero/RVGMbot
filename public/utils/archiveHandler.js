@@ -6,55 +6,39 @@ const outputDir = path.join(__dirname, "public", "utils", "archiveData");
 
 const sheets = [
   {
-    sheetId: "1Hl11drnPsymQADL1c7bP7p53AU0udT63uEsvyyS2F70",
-    tabs: [{ gid: "0", filename: "mainSheetData.csv", removePreamble: true }],
+    sheetId: "15_V4PDCtNERbi9j2edquN_s88pHcMTqfny4yhmV9HDA",
+    tabs: [{ gid: "0", filename: "RtVGMData.csv", removePreamble: true }],
   },
   {
-    sheetId: "1KCxJ0BCaHtupXAv8TUUP-1RzbjJd0ZPI2_K9PrP90p0",
-    tabs: [
-      { gid: "0", filename: "locationSheetData.csv", removePreamble: false },
-    ],
+    sheetId: "1meEpo_8AqMfJzIt5fAc4Er8UUpgo4pp12wgGkJvEbZ4",
+    tabs: [{ gid: "1231590126", filename: "RtVGMCompatability.csv", removePreamble: true }],
+  },
+  
+  {
+    sheetId: "1IbPjJgReM1bN3XcVLe2u7UREwvqIPdzlnqmu0WN49uM",
+    tabs: [{ gid: "1748394076", filename: "RtVGMPrevious.csv", removePreamble: true }],
   },
 ];
 
-const contributorVgmSheet = {
-  sheetId: "1KhA-lEXLwCsGiScPucGZffgBF6fh3PDpSbIWHVw4Cs8",
-  gid: "0",
-};
-
 const MAX_CONCURRENT_DOWNLOADS = 10;
 
-async function PopulateSdVgmLinks() {
-  // 1. Download static sheets
-  for (const sheet of sheets) {
-    for (const tab of sheet.tabs) {
-      const url = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&id=${sheet.sheetId}&gid=${tab.gid}`;
-      const filePath = path.join(outputDir, tab.filename);
-      const file = await fetchAndSaveCSV(url, filePath, tab.removePreamble);
+async function PopulateVgmLinks() {
+    const vgmUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv&id=${sheet.sheetId}&gid=${tab.gid}`;
+  const vgmPath = path.join(outputDir, "mainSheetData.csv");
 
-      if (!file) {
-        console.error(`Failed to fetch and save ${tab.filename}`);
-      }
-    }
-  }
-
-  // 2. Download contributorVgmSheet GID 0
-  const contributorVgmUrl = `https://docs.google.com/spreadsheets/d/${contributorVgmSheet.sheetId}/export?format=csv&id=${contributorVgmSheet.sheetId}&gid=${contributorVgmSheet.gid}`;
-  const contributorVgmPath = path.join(outputDir, "contributorVgm.csv");
-
-  const contributorVgmFile = await fetchAndSaveCSV(
-    contributorVgmUrl,
-    contributorVgmPath,
+  const vgmFile = await fetchAndSaveCSV(
+    vgmUrl,
+    vgmPath,
     false
   );
 
-  if (!contributorVgmFile) {
-    console.error("Failed to fetch contributorVgm main page.");
+  if (!vgmFile) {
+    console.error("Failed to fetch Vgm main page.");
     return;
   }
 
-  // 3. Parse contributorVgm.csv, download series, and create JSON map
-  await downloadAllSeriesCsvsThrottled(contributorVgmPath);
+  // 3. Parse Vgm.csv, download series, and create JSON map
+  await downloadAllSeriesCsvsThrottled(vgmPath);
 
   console.log("All CSV files downloaded and saved.");
 }
@@ -82,13 +66,13 @@ async function fetchAndSaveCSV(url, filePath, removePreamble) {
   }
 }
 
-async function downloadAllSeriesCsvsThrottled(contributorVgmPath) {
+async function downloadAllSeriesCsvsThrottled(vgmPath) {
   try {
-    const data = await fs.readFile(contributorVgmPath, "utf8");
+    const data = await fs.readFile(vgmPath, "utf8");
     const lines = data.split(/\r?\n/);
 
     if (lines.length < 2) {
-      console.error("contributorVgm.csv appears empty or too short.");
+      console.error("vgm.csv appears empty or too short.");
       return;
     }
 
@@ -131,8 +115,8 @@ async function downloadAllSeriesCsvsThrottled(contributorVgmPath) {
         downloadUrl = `https://docs.google.com/spreadsheets/d/${externalSheetId}/export?format=csv&id=${externalSheetId}&gid=0`;
         safeWorksheetId = externalSheetId;
       } else {
-        // numeric gid from the contributorVgm sheet
-        downloadUrl = `https://docs.google.com/spreadsheets/d/${contributorVgmSheet.sheetId}/export?format=csv&id=${contributorVgmSheet.sheetId}&gid=${worksheetRaw}`;
+        // numeric gid from the vgm sheet
+        downloadUrl = `https://docs.google.com/spreadsheets/d/${mainSheetData.sheetId}/export?format=csv&id=${mainSheetData.sheetId}&gid=${worksheetRaw}`;
         safeWorksheetId = worksheetRaw.replace(/[^\w\-]/g, "");
       }
 
@@ -161,10 +145,10 @@ async function downloadAllSeriesCsvsThrottled(contributorVgmPath) {
       }
       newLines.push(cols.join(","));
     }
-    await fs.writeFile(contributorVgmPath, newLines.join("\n"), "utf8");
-    console.log(`Updated contributorVgm.csv with safe worksheet IDs.`);
+    await fs.writeFile(vgmPath, newLines.join("\n"), "utf8");
+    console.log(`Updated vgm.csv with safe worksheet IDs.`);
   } catch (error) {
-    console.error("Error parsing contributorVgm.csv:", error);
+    console.error("Error parsing vgm.csv:", error);
   }
 }
 
@@ -205,4 +189,4 @@ async function throttlePromises(taskFunctions, maxConcurrent) {
   });
 }
 
-module.exports = { PopulateSdVgmLinks };
+module.exports = { PopulateVgmLinks };

@@ -19,44 +19,60 @@ const pipeline = promisify(stream.pipeline);
 
 eval(fs.readFileSync("./public/imageprocessing/imagebuilder.js") + "");
 
-let mainVgmData = [];
-let locationVgmData = [];
+let rtVGMData = [];
+let ratingVgmData = [];
+let rtVGMPrevious = [];
 
 // Load the main CSV and filter out empty rows
-fs.createReadStream("./public/utils/archiveData/mainSheetData.csv")
+fs.createReadStream("./public/utils/archiveData/RtVGMData.csv")
   .pipe(csv())
   .on("data", (row) => {
-    if (row["Game Title"]) {
+    if (row["Game"]) {
       const lowerCaseRow = {};
       for (const key in row) {
         lowerCaseRow[key.toLowerCase()] = row[key];
       }
-      mainVgmData.push(lowerCaseRow);
+      rtVGMData.push(lowerCaseRow);
     }
   })
   .on("end", () => {
-    console.log(`Loaded ${mainVgmData.length} main VGM tracks.`);
+    console.log(`Loaded ${rtVGMData.length} main VGM tracks.`);
   });
 
-// Load the location CSV
-fs.createReadStream("./public/utils/archiveData/locationSheetData.csv")
+// Load the Rank CSV
+fs.createReadStream("./public/utils/archiveData/RtVGMCompatability.csv")
   .pipe(csv())
   .on("data", (row) => {
     const lowerCaseRow = {};
     for (const key in row) {
       lowerCaseRow[key.toLowerCase()] = row[key];
     }
-    locationVgmData.push(lowerCaseRow);
+    ratingVgmData.push(lowerCaseRow);
   })
   .on("end", () => {
-    console.log(`Loaded ${locationVgmData.length} location VGM tracks.`);
+    console.log(`Loaded ${ratingVgmData.length} location VGM tracks.`);
+  });
+
+  fs.createReadStream("./public/utils/archiveData/RtVGMPrevious.csv")
+  .pipe(csv())
+  .on("data", (row) => {
+    if (row["Game"]) {
+      const lowerCaseRow = {};
+      for (const key in row) {
+        lowerCaseRow[key.toLowerCase()] = row[key];
+      }
+      rtVGMPrevious.push(lowerCaseRow);
+    }
+  })
+  .on("end", () => {
+    console.log(`Loaded ${rtVGMPrevious.length} main VGM tracks.`);
   });
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("sd-track")
+    .setName("ranked-track")
     .setDescription(
-      "Get a random or specific track from the SupraDarky catalogue!"
+      "Get a random or specific track from the rating archives!"
     )
     .addIntegerOption((option) =>
       option
@@ -68,10 +84,10 @@ module.exports = {
         .setName("series")
         .setDescription("Search by series/game name. Returns a list")
     )
-    .addIntegerOption((option) =>
+    .addStringOption((option) =>
       option
-        .setName("year")
-        .setDescription("Filter results by year of release.  Returns a list.")
+        .setName("submitter")
+        .setDescription("Filter by the user name of the submitted tracks.")
     )
     .addBooleanOption((option) =>
       option
@@ -81,11 +97,11 @@ module.exports = {
   async execute(interaction) {
     const seriesSearch = interaction.options.getString("series");
     const inputNum = interaction.options.getInteger("track-number");
-    const yearFilter = interaction.options.getInteger("year");
+    const submitter = interaction.options.getString("submitter");
     const makePublic = interaction.options.getBoolean("make-public") ?? false;
 
     // Validate mutually exclusive options
-    if (inputNum !== null && yearFilter !== null) {
+    if (submitter !== null && inputNum !== null) {
       return await interaction.reply({
         content:
           "The `year` option cannot be used in conjuction with `track-number`.",
@@ -101,18 +117,24 @@ module.exports = {
       });
     }
 
-    var matches = mainVgmData;
+    var matches = rtVGMData;
 
     if (seriesSearch || yearFilter !== null) {
       if (seriesSearch !== null) {
-        matches = mainVgmData.filter((track) =>
-          track["game title"]
+
+         const fuse = new Fuse(allTracks, { keys: ["Game Title"], threshold: 0.2 });
+          let matches = seriesSearch
+          ? fuse.search(seriesSearch).map((r) => r.item)
+          : allTracks;
+
+        matches = rtVGMData.filter((track) =>
+          track["Game"]
             ?.toLowerCase()
             .includes(seriesSearch.toLowerCase())
         );
       }
 
-      if (yearFilter !== null) {
+      if (submitter !== null) {
         matches = matches.filter(
           (t) => String(t["year of release"]) === String(yearFilter)
         );
@@ -138,7 +160,7 @@ module.exports = {
 
     let track;
     if (inputNum !== null) {
-      track = mainVgmData.find((row) => parseInt(row["bvgm#"]) === inputNum);
+      track = ratingVgmData.find((row) => parseInt(row["ID"]) === inputNum);
       if (!track) {
         return await interaction.reply({
           content: `No track found with track number ${inputNum}.`,
@@ -146,8 +168,8 @@ module.exports = {
         });
       }
     } else {
-      // Pick randomly from entries that have a YouTube URL
-      const candidates = mainVgmData.filter((row) => row["youtube url"]);
+      // Pick randomly from entries that have a Link
+      const candidates = ratingVgmData.filter((row) => row["Link"]);
       track = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
@@ -157,15 +179,15 @@ module.exports = {
         ephemeral: !makePublic,
       });
     console.log(track);
-    console.log(track["bvgm#"]);
-    const bgmNum = parseInt(track["bvgm#"], 10) - 1;
-    const locationInfo = locationVgmData[bgmNum];
+    console.log(track["Number"]);
+    const bgmNum = parseInt(track["Number"], 10) - 1;
+    const locationInfo = ratingVgmData[bgmNum];
     console.log(locationInfo);
 
-    const title = `${track["game title"] || "Unknown Game"} – ${
-      track["piece title"] || "Unknown Track"
+    const title = `${track["Game"] || "Unknown Game"} – ${
+      track["Song"] || "Unknown Track"
     }`;
-    const youtubeUrl = track["youtube url"] || null;
+    const youtubeUrl = track["Link"] || null;
 
     let formattedUrl = await GetYtThumb([youtubeUrl], true);
 
@@ -173,23 +195,23 @@ module.exports = {
       .setTitle(title)
       .setURL(youtubeUrl)
       .setAuthor({
-        name: track["sd label"] || "Unknown Label",
+        name: "Submission #" + track["Number"] || "???",
         iconURL:
           "https://cdn.glitch.global/485febab-53bf-46f2-9ec1-a3c597dfaebe/SD%20Logo.png?v=1676855711752",
       })
       .setColor(0x5865f2)
       .setThumbnail(formattedUrl[0][0])
       .setFooter({
-        text: "Supradarky's VGM Club",
+        text: "Rate the VGM Project",
         iconURL:
           "https://cdn.glitch.global/485febab-53bf-46f2-9ec1-a3c597dfaebe/sd-img.jpeg?v=1676586931016",
       });
 
     // Add inline fields if they exist
-    if (track["composer(s)"] && track["composer(s)"].trim() !== "") {
+    if (track["Composer"] && track["Composer"].trim() !== "") {
       embed.addFields({
         name: "Composers",
-        value: track["composer(s)"],
+        value: track["Composer"],
         inline: false,
       });
     }
@@ -297,17 +319,17 @@ async function handleSeriesResults(
   matches,
   makePublic,
   yearFilter = null,
-  locationVgmData
+  ratingVgmData
 ) {
   let index = 0;
 
   const buildEmbed = async (track) => {
-    const bgmNum = parseInt(track["bvgm#"], 10) - 1;
-    const locationInfo = locationVgmData[bgmNum];
+    const bgmNum = parseInt(track["Number"], 10) - 1;
+    const locationInfo = ratingVgmData[bgmNum];
 
     const embed = new EmbedBuilder()
-      .setTitle(`${track["game title"]} – ${track["piece title"]}`)
-      .setURL(track["youtube url"])
+      .setTitle(`${track["Game"]} – ${track["Song"]}`)
+      .setURL(track["Link"])
       .setColor(0x5865f2)
       .setAuthor({
         name: track["sd label"] || "Unknown Label",
@@ -344,16 +366,16 @@ async function handleSeriesResults(
     }
 
     // Add thumbnail
-    const thumbs = await GetYtThumb([track["youtube url"]], true);
+    const thumbs = await GetYtThumb([track["Link"]], true);
     if (thumbs && thumbs[0] && thumbs[0][0]) {
       embed.setThumbnail(thumbs[0][0]);
     }
 
     // Add metadata like before...
-    if (track["composer(s)"]) {
+    if (track["Composer"]) {
       embed.addFields({
         name: "Composers",
-        value: track["composer(s)"],
+        value: track["Composer"],
         inline: false,
       });
     }
@@ -386,10 +408,10 @@ async function handleSeriesResults(
 
     embed.addFields(secondLine);
 
-    if (track["Youtube URL"]) {
+    if (track["Link"]) {
       embed.addFields({
         name: "URL",
-        value: track["Youtube URL"],
+        value: track["Link"],
         inline: false,
       });
     }
@@ -450,11 +472,11 @@ async function paginateSeriesResults(
   });
   // Sort entries
   matches.sort((a, b) => {
-    const aGame = (a["Game Title"] || "").toLowerCase();
-    const bGame = (b["Game Title"] || "").toLowerCase();
+    const aGame = (a["Game"] || "").toLowerCase();
+    const bGame = (b["Game"] || "").toLowerCase();
     const cmp = aGame.localeCompare(bGame);
     if (cmp !== 0) return cmp;
-    return (a["piece title"] || "").localeCompare(b["piece title"] || "");
+    return (a["Song"] || "").localeCompare(b["Song"] || "");
   });
 
   let page = 0;
@@ -466,9 +488,9 @@ async function paginateSeriesResults(
     const slice = matches.slice(start, start + itemsPerPage);
     const lines = slice.map((t, i) => {
       const idx = start + i + 1;
-      const url = t["youtube url"];
-      const title = t["piece title"] || "Unknown";
-      const game = t["game title"] || "Unknown Game";
+      const url = t["Link"];
+      const title = t["Song"] || "Unknown";
+      const game = t["Game"] || "Unknown Game";
       const label = t["sd label"] || "";
       return `${idx}. ${
         url ? `[${title}](${url})` : title
