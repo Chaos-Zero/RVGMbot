@@ -113,7 +113,7 @@ async function handleTrackFetch(
         `RtVGMCompatability.csv`
       );
     if (fs.existsSync(trackRatingCsvfilePath)) {
-        trackRatings = loadTracksFromCsv(trackRatingCsvfilePath, true);
+        trackRatings = loadTracksFromCsv(trackRatingCsvfilePath, false);
     }
     console.log(`Loaded ${trackRatings.length} ranked tracks from CSV.`);
 
