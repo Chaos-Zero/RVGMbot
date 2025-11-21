@@ -159,9 +159,9 @@ async function handleTrackFetch(
       const ratingEntry = trackRatings.find(
         (r) => r["Track ID"] === track["ID"]
       );
-      track.push("Count" = ratingEntry["Count"])
-      track.push("Average" = ratingEntry["Average"])
-      track.push("StandardDeviation" = ratingEntry.["Std Dev"])
+      track["Count"] = ratingEntry["Count"])
+      track["Average"] = ratingEntry["Average"])
+      track["StandardDeviation"] = ratingEntry.["Std Dev"])
     }
 
     // paginate or list
