@@ -159,9 +159,9 @@ async function handleTrackFetch(
       const ratingEntry = trackRatings.find(
         (r) => r["Track ID"] === track["ID"]
       );
-      track["Count"] = ratingEntry["Count"])
-      track["Average"] = ratingEntry["Average"])
-      track["StandardDeviation"] = ratingEntry.["Std Dev"])
+      track["Count"] = ratingEntry["Count"];
+      track["Average"] = ratingEntry["Average"];
+      track["StandardDeviation"] = ratingEntry["Std Dev"];
     }
 
     // paginate or list
@@ -203,9 +203,9 @@ async function handleTrackFetch(
     const ratingEntry = trackRatings.find(
         (r) => r["Track ID"] === chosenTrack["ID"]
       );
-      chosenTrack["Count"] = ratingEntry["Count"])
-      chosenTrack["Average"] = ratingEntry["Average"])
-      chosenTrack["StandardDeviation"] = ratingEntry.["Std Dev"])
+      chosenTrack["Count"] = ratingEntry["Count"];
+      chosenTrack["Average"] = ratingEntry["Average"];
+      chosenTrack["StandardDeviation"] = ratingEntry["Std Dev"];
   }
 
   if (!chosenTrack) {
