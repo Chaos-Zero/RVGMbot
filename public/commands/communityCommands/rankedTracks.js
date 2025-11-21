@@ -157,11 +157,16 @@ async function handleTrackFetch(
 
     for (const track of matches) {
       const ratingEntry = trackRatings.find(
-        (r) => r["Track ID"] === track["ID"]
+        (r) => String(r["ID"]).trim() === String(track["ID"]).trim()
       );
-      track["Count"] = ratingEntry["Count"];
-      track["Average"] = ratingEntry["Average"];
-      track["StandardDeviation"] = ratingEntry["Std Dev"];
+
+      if (ratingEntry) {
+        track["Count"] = ratingEntry["Count"];
+        track["Average"] = ratingEntry["Average"];
+        track["StandardDeviation"] = ratingEntry["Std Dev"];
+      } else {
+        console.warn(`No rating entry for track ID ${track["ID"]}`);
+      }
     }
 
     // paginate or list
@@ -201,11 +206,14 @@ async function handleTrackFetch(
     const validTracks = allTracks.filter((r) => r["URL"]);
     chosenTrack = validTracks[Math.floor(Math.random() * validTracks.length)];
     const ratingEntry = trackRatings.find(
-        (r) => r["Track ID"] === chosenTrack["ID"]
-      );
+      (r) => String(r["ID"]).trim() === String(chosenTrack["ID"]).trim()
+    );
+
+    if (ratingEntry) {
       chosenTrack["Count"] = ratingEntry["Count"];
       chosenTrack["Average"] = ratingEntry["Average"];
       chosenTrack["StandardDeviation"] = ratingEntry["Std Dev"];
+    }
   }
 
   if (!chosenTrack) {
