@@ -203,9 +203,9 @@ async function handleTrackFetch(
     const ratingEntry = trackRatings.find(
         (r) => r["Track ID"] === chosenTrack["ID"]
       );
-      chosenTrack.push("Count" = ratingEntry["Count"])
-      chosenTrack.push("Average" = ratingEntry["Average"])
-      chosenTrack.push("StandardDeviation" = ratingEntry.["Std Dev"])
+      chosenTrack["Count"] = ratingEntry["Count"])
+      chosenTrack["Average"] = ratingEntry["Average"])
+      chosenTrack["StandardDeviation"] = ratingEntry.["Std Dev"])
   }
 
   if (!chosenTrack) {
