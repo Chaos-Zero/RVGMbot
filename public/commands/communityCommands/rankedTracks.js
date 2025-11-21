@@ -260,14 +260,6 @@ function buildEmbedForTrack(track) {
     });
   }
 
-  if (track["URL"]) {
-    embed.addFields({
-      name: "Youtube Link",
-      value: track["URL"],
-      inline: true,
-    });
-  }
-
   if (track["Count"] && track["Count"] !== "0") {
     embed.addFields({
       name: "Rank Tally",
@@ -290,6 +282,15 @@ function buildEmbedForTrack(track) {
       inline: true,
     });
   }
+
+  if (track["URL"]) {
+    embed.addFields({
+      name: "Youtube Link",
+      value: track["URL"],
+      inline: false,
+    });
+  }
+
   const footerText = "Rate the VGM Project";
   embed.setFooter({
     text: footerText,
