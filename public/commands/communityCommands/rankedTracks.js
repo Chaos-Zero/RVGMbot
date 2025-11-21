@@ -260,8 +260,15 @@ function buildEmbedForTrack(track) {
     });
   }
 
+  if (track["URL"]) {
+    embed.addFields({
+      name: "Youtube Link",
+      value: track["URL"],
+      inline: true,
+    });
+  }
 
-  if (track["Count"]) {
+  if (track["Count"] && track["Count"] !== "0") {
     embed.addFields({
       name: "Rank Tally",
       value: track["Count"] || "Unknown",
@@ -278,7 +285,7 @@ function buildEmbedForTrack(track) {
 
   if (track["StandardDeviation"]) {
     embed.addFields({
-      name: "Voting Range (Std Dev)",
+      name: "Standard Deviation",
       value: "||" + track["StandardDeviation"] + "||" || "Unknown",
       inline: true,
     });
