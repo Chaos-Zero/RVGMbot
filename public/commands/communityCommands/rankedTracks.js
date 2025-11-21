@@ -98,14 +98,24 @@ async function handleTrackFetch(
   useEditReply = false
 ) {
     let allTracks = [];
-    const filePath = path.join(
+    let trackRatings = [];
+    const previousCsvfilePath = path.join(
         archiveFolder,
         `RtVGMPrevious.csv`
       );
-    if (fs.existsSync(filePath)) {
-        allTracks = loadTracksFromCsv(filePath);
+    if (fs.existsSync(previousCsvfilePath)) {
+        allTracks = loadTracksFromCsv(previousCsvfilePath, true);
     }
     console.log(`Loaded ${allTracks.length} ranked tracks from CSV.`);
+
+     const trackRatingCsvfilePath = path.join(
+        archiveFolder,
+        `RtVGMCompatability.csv`
+      );
+    if (fs.existsSync(trackRatingCsvfilePath)) {
+        trackRatings = loadTracksFromCsv(trackRatingCsvfilePath, true);
+    }
+    console.log(`Loaded ${trackRatings.length} ranked tracks from CSV.`);
 
   if (seriesSearch || submitter) {
     let matches = allTracks
@@ -145,6 +155,15 @@ async function handleTrackFetch(
       });
     }
 
+    for (const track of matches) {
+      const ratingEntry = trackRatings.find(
+        (r) => r["Track ID"] === track["ID"]
+      );
+      track.push("Count" = ratingEntry["Count"])
+      track.push("Average" = ratingEntry["Average"])
+      track.push("StandardDeviation" = ratingEntry.["Std Dev"])
+    }
+
     // paginate or list
     await paginateSeriesResults(
       interaction,
@@ -181,6 +200,12 @@ async function handleTrackFetch(
   } else {
     const validTracks = allTracks.filter((r) => r["URL"]);
     chosenTrack = validTracks[Math.floor(Math.random() * validTracks.length)];
+    const ratingEntry = trackRatings.find(
+        (r) => r["Track ID"] === chosenTrack["ID"]
+      );
+      chosenTrack.push("Count" = ratingEntry["Count"])
+      chosenTrack.push("Average" = ratingEntry["Average"])
+      chosenTrack.push("StandardDeviation" = ratingEntry.["Std Dev"])
   }
 
   if (!chosenTrack) {
@@ -227,25 +252,26 @@ function buildEmbedForTrack(track) {
     });
   }
 
-  if (track["Platform"]) {
+
+  if (track["Count"]) {
     embed.addFields({
-      name: "Platform",
-      value: track["Platform"] || "Unknown",
+      name: "Rank Tally",
+      value: track["Count"] || "Unknown",
       inline: true,
     });
   }
-  if (track["Franchise"]) {
+  if (track["Average"]) {
     embed.addFields({
-      name: "Franchise",
-      value: track["Franchise"] || "Unknown",
+      name: "Average Rating",
+      value: "||" + track["Average"] + "||" || "Unknown",
       inline: true,
     });
   }
 
-  if (track["Year of release"]) {
+  if (track["StandardDeviation"]) {
     embed.addFields({
-      name: "Year of Release",
-      value: track["Year of release"] || "Unknown",
+      name: "Voting Range (Std Dev)",
+      value: "||" + track["StandardDeviation"] + "||" || "Unknown",
       inline: true,
     });
   }
@@ -466,7 +492,7 @@ async function paginateSeriesResults(
 }
 
 // Loads and parses CSV safely
-function loadTracksFromCsv(filePath) {
+function loadTracksFromCsv(filePath, needsFilter) {
   console.log(`Loading ranked tracks from CSV at: ${filePath}`);
   const csvData = fs.readFileSync(filePath, "utf8");
   const { data, errors, meta } = Papa.parse(csvData, {
@@ -489,7 +515,7 @@ function loadTracksFromCsv(filePath) {
     throw new Error(`CSV parsing error: ${errors[0].message}`);
   }
 
-  return data.filter(
-    (row) => row["Source"] && row["Song"] && row["URL"]
-  );
+  return needsFilter ?  data.filter(
+    (row) => row["Source"] && row["Song"] && row["URL"] 
+  ) : data;
 }
