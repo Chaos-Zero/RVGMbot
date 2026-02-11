@@ -327,7 +327,7 @@ function buildEmbedForTrack(track) {
   embed.setFooter({
     text: footerText,
     iconURL:
-      "https://media.tenor.com/idS-Mx-F43QAAAAi/kirby-dancing.gif",
+      "http://91.99.239.6/files/suzie/kirbHead.png",
   });
 
   return embed;

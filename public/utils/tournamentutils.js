@@ -238,7 +238,7 @@ async function CreateAndSendBattleVotesEmbed(
       .setFooter({
         text: "Supradarky's VGM Club",
         iconURL:
-          "http://91.99.239.6/files/assets/sd-img.png",
+          "http://91.99.239.6/files/suzie/kirbHead.png",
       });
   } else {
     if (roundEntries) {
@@ -338,7 +338,7 @@ async function CreateAndSendBattleVotesEmbed(
       .setFooter({
         text: "Supradarky's VGM Club",
         iconURL:
-          "http://91.99.239.6/files/assets/sd-img.png",
+          "http://91.99.239.6/files/suzie/kirbHead.png",
       });
   }
   if (interaction == "") {

@@ -261,7 +261,7 @@ async function paginateSeriesResults(
       .setFooter({
         text: "Playlists can be accessed via the link at the top of the message!",
         iconURL:
-          "https://cdn.glitch.global/485febab-53bf-46f2-9ec1-a3c597dfaebe/sd-img.jpeg?v=1676586931016",
+          "http://91.99.239.6/files/suzie/kirbHead.png",
       });
   };
 
