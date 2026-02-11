@@ -1,6 +1,6 @@
 # Welcome to RVGM-Bot
 
-This bot is built in order to serve music to the community. 
+This bot is built tto review ranked tracks! 
 
 This project includes a Node.js server script and a web page that connects to it. The front-end page is currenly filler. The intention is to use it to generate brackets on the fly to export to an image to send onto the discord server during tournaments. 
 

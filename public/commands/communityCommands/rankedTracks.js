@@ -36,11 +36,13 @@ module.exports = {
       option
         .setName("submitter")
         .setDescription("Filter by the user name of the submitted tracks.")
+        .setAutocomplete(true)
     )
       .addStringOption((option) =>
         option
           .setName("series")
           .setDescription("Filter results by series/game. Returns a list.")
+          .setAutocomplete(true)
       )
       .addBooleanOption((option) =>
         option
@@ -85,6 +87,39 @@ module.exports = {
       makePublic,
       true
     );
+  },
+
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    const query = String(focused.value || "").toLowerCase();
+    let options = [];
+
+    if (focused.name === "submitter") {
+      const submitterNames = getSubmitterNames();
+      const matches = query
+        ? submitterNames.filter((name) =>
+            name.toLowerCase().includes(query)
+          )
+        : submitterNames;
+      options = matches.map((name) => ({ name, value: name }));
+    } else if (focused.name === "series") {
+      const seriesNames = getSeriesNames();
+      const matches = query
+        ? seriesNames.filter((name) =>
+            name.toLowerCase().includes(query)
+          )
+        : seriesNames;
+      options = matches.map((name) => ({ name, value: name }));
+    } else {
+      return interaction.respond([]);
+    }
+
+    const choices = options.slice(0, 25).map((opt) => ({
+      name: opt.name.slice(0, 100),
+      value: opt.value,
+    }));
+
+    return interaction.respond(choices);
   },
 };
 
@@ -534,4 +569,53 @@ function loadTracksFromCsv(filePath, needsFilter) {
   return needsFilter ?  data.filter(
     (row) => row["Source"] && row["Song"] && row["URL"] 
   ) : data;
+}
+
+const tracksCsvPath = path.join(archiveFolder, "RtVGMPrevious.csv");
+let tracksCache = {
+  mtimeMs: 0,
+  tracks: [],
+};
+
+function getTracksForAutocomplete() {
+  if (!fs.existsSync(tracksCsvPath)) return [];
+
+  let stat;
+  try {
+    stat = fs.statSync(tracksCsvPath);
+  } catch (err) {
+    console.warn("Unable to stat submitter CSV:", err);
+    return [];
+  }
+
+  if (stat.mtimeMs !== tracksCache.mtimeMs) {
+    tracksCache = {
+      mtimeMs: stat.mtimeMs,
+      tracks: loadTracksFromCsv(tracksCsvPath, true),
+    };
+  }
+
+  return tracksCache.tracks;
+}
+
+function getSubmitterNames() {
+  const tracks = getTracksForAutocomplete();
+  const unique = new Set();
+  for (const track of tracks) {
+    if (track["Nominator"]) unique.add(String(track["Nominator"]).trim());
+  }
+  return Array.from(unique)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function getSeriesNames() {
+  const tracks = getTracksForAutocomplete();
+  const unique = new Set();
+  for (const track of tracks) {
+    if (track["Source"]) unique.add(String(track["Source"]).trim());
+  }
+  return Array.from(unique)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
 }
