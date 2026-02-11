@@ -10,7 +10,7 @@ const Fuse = require("fuse.js");
 const path = require("path");
 const Papa = require("papaparse");
 
-eval(fs.readFileSync("./public/tournament/tournamentutils.js") + "");
+eval(fs.readFileSync("./public/utils/tournamentutils.js") + "");
 
 const archiveFolder = path.join(
   __dirname,
