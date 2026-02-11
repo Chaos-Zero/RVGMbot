@@ -104,11 +104,11 @@ module.exports = {
       options = matches.map((name) => ({ name, value: name }));
     } else if (focused.name === "series") {
       const seriesNames = getSeriesNames();
-      const matches = query
-        ? seriesNames.filter((name) =>
-            name.toLowerCase().includes(query)
-          )
-        : seriesNames;
+      let matches = seriesNames;
+      if (query) {
+        const fuse = new Fuse(seriesNames, { threshold: 0.2 });
+        matches = fuse.search(query).map((result) => result.item);
+      }
       options = matches.map((name) => ({ name, value: name }));
     } else {
       return interaction.respond([]);
@@ -191,9 +191,7 @@ async function handleTrackFetch(
     }
 
     for (const track of matches) {
-      const ratingEntry = trackRatings.find(
-        (r) => String(r["ID"]).trim() === String(track["ID"]).trim()
-      );
+      const ratingEntry = findRatingEntry(trackRatings, track, null);
 
       if (ratingEntry) {
         track["Count"] = ratingEntry["Count"];
@@ -240,15 +238,6 @@ async function handleTrackFetch(
   } else {
     const validTracks = allTracks.filter((r) => r["URL"]);
     chosenTrack = validTracks[Math.floor(Math.random() * validTracks.length)];
-    const ratingEntry = trackRatings.find(
-      (r) => String(r["ID"]).trim() === String(chosenTrack["ID"]).trim()
-    );
-
-    if (ratingEntry) {
-      chosenTrack["Count"] = ratingEntry["Count"];
-      chosenTrack["Average"] = ratingEntry["Average"];
-      chosenTrack["StandardDeviation"] = ratingEntry["Std Dev"];
-    }
   }
 
   if (!chosenTrack) {
@@ -258,6 +247,14 @@ async function handleTrackFetch(
       compontens: [],
       ephemeral: !makePublic,
     });
+  }
+
+  const ratingEntry = findRatingEntry(trackRatings, chosenTrack, inputNum);
+
+  if (ratingEntry) {
+    chosenTrack["Count"] = ratingEntry["Count"];
+    chosenTrack["Average"] = ratingEntry["Average"];
+    chosenTrack["StandardDeviation"] = ratingEntry["Std Dev"];
   }
 
   return await sendEmbed(
@@ -443,7 +440,8 @@ async function paginateSeriesResults(
       const title = t["Song"] || "Unknown";
       const game = t["Source"] || "Unknown Game";
       const who = t["Nominator"] || "???";;
-      return `${idx}. ${url ? `[${title}](${url})` : title} – ${game} | ${who}`;
+      const ratingInfo = formatRatingInfo(t);
+      return `${idx}. ${url ? `[${title}](${url})` : title} – ${game} | ${who}${ratingInfo}`;
     });
 
     const headerParts = [];
@@ -542,6 +540,20 @@ async function paginateSeriesResults(
   });
 }
 
+function formatRatingInfo(track) {
+  const parts = [];
+  if (track["Count"] && track["Count"] !== "0") {
+    parts.push(`Tally: ${track["Count"]}`);
+  }
+  if (track["Average"]) {
+    parts.push(`Avg: ${track["Average"]}`);
+  }
+  if (track["StandardDeviation"]) {
+    parts.push(`StdDev: ${track["StandardDeviation"]}`);
+  }
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
 // Loads and parses CSV safely
 function loadTracksFromCsv(filePath, needsFilter) {
   console.log(`Loading ranked tracks from CSV at: ${filePath}`);
@@ -569,6 +581,54 @@ function loadTracksFromCsv(filePath, needsFilter) {
   return needsFilter ?  data.filter(
     (row) => row["Source"] && row["Song"] && row["URL"] 
   ) : data;
+}
+
+function findRatingEntry(trackRatings, track, inputNum) {
+  if (!trackRatings || trackRatings.length === 0) return null;
+
+  const targetIds = new Set();
+  if (inputNum !== null && inputNum !== undefined) {
+    targetIds.add(String(inputNum).trim());
+  }
+
+  const trackId = getTrackIdValue(track);
+  if (trackId) targetIds.add(trackId);
+
+  if (targetIds.size === 0) return null;
+
+  const ratingKeys = Object.keys(trackRatings[0] || {});
+  const candidateKeys = ratingKeys.filter((key) => {
+    const lower = key.toLowerCase();
+    return (
+      lower === "id" ||
+      lower.endsWith("id") ||
+      lower.includes(" id") ||
+      lower.includes("id ") ||
+      lower.includes("number") ||
+      lower === "#" ||
+      lower === "no"
+    );
+  });
+
+  if (candidateKeys.length === 0) return null;
+
+  return trackRatings.find((entry) =>
+    candidateKeys.some((key) => {
+      const value = entry[key];
+      if (value === undefined || value === null) return false;
+      return targetIds.has(String(value).trim());
+    })
+  );
+}
+
+function getTrackIdValue(track) {
+  if (!track) return null;
+  const keys = Object.keys(track);
+  const idKey = keys.find((k) => k.toLowerCase().startsWith("id"));
+  if (idKey && track[idKey]) return String(track[idKey]).trim();
+  const numberKey = keys.find((k) => k.toLowerCase().includes("number"));
+  if (numberKey && track[numberKey]) return String(track[numberKey]).trim();
+  return null;
 }
 
 const tracksCsvPath = path.join(archiveFolder, "RtVGMPrevious.csv");

@@ -81,11 +81,11 @@ module.exports = {
       options = matches.map((name) => ({ name, value: name }));
     } else if (focused.name === "series") {
       const seriesNames = getSeriesNames();
-      const matches = query
-        ? seriesNames.filter((name) =>
-            name.toLowerCase().includes(query)
-          )
-        : seriesNames;
+      let matches = seriesNames;
+      if (query) {
+        const fuse = new Fuse(seriesNames, { threshold: 0.2 });
+        matches = fuse.search(query).map((result) => result.item);
+      }
       options = matches.map((name) => ({ name, value: name }));
     } else {
       return interaction.respond([]);
