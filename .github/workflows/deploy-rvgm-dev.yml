@@ -1,0 +1,108 @@
+name: Deploy RVGM-dev to Hetzner
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch: {}
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-rvgm-dev
+      cancel-in-progress: true
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            #!/usr/bin/env bash
+
+            APP_DIR="/home/botuser/bots/RVGM-dev"
+            REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git"
+            BRANCH="dev"
+            PROC="rvgm-dev"
+
+            echo "[1/5] Ensure app directory exists"
+            mkdir -p "$(dirname "$APP_DIR")"
+
+            echo "[2/5] Ensure repo present on $BRANCH"
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "→ Fresh clone to $APP_DIR"
+              rm -rf "$APP_DIR"
+              git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$APP_DIR" || {
+                echo "[warning] git clone failed; continuing with whatever is there" >&2
+              }
+            fi
+
+            cd "$APP_DIR" || {
+              echo "[error] Could not cd to $APP_DIR; aborting deploy script" >&2
+              exit 0
+            }
+
+            echo "[3/5] Sync to origin/$BRANCH (best effort)"
+            git fetch --all --prune || echo "[warning] git fetch failed; using existing checkout" >&2
+            git reset --hard "origin/$BRANCH" || echo "[warning] git reset --hard origin/$BRANCH failed; keeping current working tree" >&2
+
+            echo "[4/5] Install deps (best effort)"
+            MANIFEST=""
+            if [ -f package-lock.json ]; then
+              MANIFEST="package-lock.json"
+            elif [ -f package.json ]; then
+              MANIFEST="package.json"
+            fi
+
+            if [ -n "$MANIFEST" ]; then
+              npm config set fund false           >/dev/null 2>&1 || true
+              npm config set audit false          >/dev/null 2>&1 || true
+              npm config set progress false       >/dev/null 2>&1 || true
+              npm config set fetch-timeout 120000 >/dev/null 2>&1 || true
+              npm config set fetch-retries 2      >/dev/null 2>&1 || true
+              npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || true
+
+              export CI=true NO_UPDATE_NOTIFIER=1
+
+              echo "→ Installing deps with npm (manifest: $MANIFEST)"
+              if [ -f package-lock.json ]; then
+                npm ci --omit=dev --no-audit --no-fund || echo "[warning] npm ci failed; using existing node_modules if present" >&2
+              else
+                npm i --omit=dev --no-audit --no-fund || echo "[warning] npm install failed; using existing node_modules if present" >&2
+              fi
+            else
+              echo "[info] No package-lock.json or package.json; skipping npm install"
+            fi
+
+            echo "[5/5] Reload pm2 process: $PROC via bash -lc"
+
+            # Use a login bash shell so nvm / PATH are loaded like your normal user session
+            bash -lc '
+              APP_DIR="'"$APP_DIR"'"
+              PROC="'"$PROC"'"
+
+              cd "$APP_DIR" || {
+                echo "[warning] (pm2) could not cd to $APP_DIR; skipping reload" >&2
+                exit 0
+              }
+
+              if ! command -v pm2 >/dev/null 2>&1; then
+                echo "[warning] pm2 not found in login shell; skipping reload" >&2
+                exit 0
+              fi
+
+              echo "[info] Using pm2 at: $(command -v pm2)"
+              pm2 reload "$PROC" || {
+                echo "[warning] pm2 reload \"$PROC\" failed; trying pm2 start" >&2
+                pm2 start ecosystem.config.js --only "$PROC" || echo "[warning] pm2 start \"$PROC\" also failed" >&2
+              }
+            '
+
+            echo "[Done] Deploy script finished"
+            # Always succeed from CI's point of view
+            exit 0

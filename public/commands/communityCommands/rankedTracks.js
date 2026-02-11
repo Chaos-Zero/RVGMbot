@@ -1,0 +1,681 @@
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  EmbedBuilder,
+  ButtonBuilder,
+} = require("discord.js");
+const fs = require("fs");
+const Fuse = require("fuse.js");
+const path = require("path");
+const Papa = require("papaparse");
+
+eval(fs.readFileSync("./public/imageprocessing/imagebuilder.js") + "");
+
+const archiveFolder = path.join(
+  __dirname,
+  "..",
+  "..",
+  "utils",
+  "archiveData"
+);
+
+module.exports = {
+  data: (() => {
+    return new SlashCommandBuilder()
+      .setName("ranked-track")
+      .setDescription(
+        "Get a random or specific track from the rating archives!"
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("track-number")
+          .setDescription("Use a VGM # to get a specific track")
+      )
+      .addStringOption((option) =>
+      option
+        .setName("submitter")
+        .setDescription("Filter by the user name of the submitted tracks.")
+        .setAutocomplete(true)
+    )
+      .addStringOption((option) =>
+        option
+          .setName("series")
+          .setDescription("Filter results by series/game. Returns a list.")
+          .setAutocomplete(true)
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("make-public")
+          .setDescription("Choose to post the result publicly")
+      );
+  })(),
+
+  async execute(interaction) {
+    const inputNum = interaction.options.getInteger("track-number");
+    const seriesSearch = interaction.options.getString("series");
+    const submitter = interaction.options.getString("submitter");
+    const makePublic = interaction.options.getBoolean("make-public") ?? false;
+
+
+    // Validate mutually exclusive options
+    if (inputNum !== null && submitter !== null) {
+      return await interaction.reply({
+        content:
+          "The `submitter` option cannot be used in conjuction with `track-number`.",
+        ephemeral: true,
+      });
+    }
+    if (seriesSearch && inputNum !== null) {
+      return await interaction.reply({
+        content:
+          "The `series` options cannot be used in conjuction with `track-number`.",
+        ephemeral: true,
+      });
+    }
+
+    await interaction.reply({
+      content: "🎶 Fetching...",
+      ephemeral: !makePublic,
+    });
+
+    await handleTrackFetch(
+      interaction,
+      inputNum,
+      seriesSearch,
+      submitter,
+      makePublic,
+      true
+    );
+  },
+
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    const query = String(focused.value || "").toLowerCase();
+    let options = [];
+
+    if (focused.name === "submitter") {
+      const submitterNames = getSubmitterNames();
+      const matches = query
+        ? submitterNames.filter((name) =>
+            name.toLowerCase().includes(query)
+          )
+        : submitterNames;
+      options = matches.map((name) => ({ name, value: name }));
+    } else if (focused.name === "series") {
+      const seriesNames = getSeriesNames();
+      let matches = seriesNames;
+      if (query) {
+        const fuse = new Fuse(seriesNames, { threshold: 0.2 });
+        matches = fuse.search(query).map((result) => result.item);
+      }
+      options = matches.map((name) => ({ name, value: name }));
+    } else {
+      return interaction.respond([]);
+    }
+
+    const choices = options.slice(0, 25).map((opt) => ({
+      name: opt.name.slice(0, 100),
+      value: opt.value,
+    }));
+
+    return interaction.respond(choices);
+  },
+};
+
+// Main track handling
+async function handleTrackFetch(
+  interaction,
+  inputNum,
+  seriesSearch,
+  submitter,
+  makePublic,
+  useEditReply = false
+) {
+    let allTracks = [];
+    let trackRatings = [];
+    const previousCsvfilePath = path.join(
+        archiveFolder,
+        `RtVGMPrevious.csv`
+      );
+    if (fs.existsSync(previousCsvfilePath)) {
+        allTracks = loadTracksFromCsv(previousCsvfilePath, true);
+    }
+    console.log(`Loaded ${allTracks.length} ranked tracks from CSV.`);
+
+     const trackRatingCsvfilePath = path.join(
+        archiveFolder,
+        `RtVGMCompatability.csv`
+      );
+    if (fs.existsSync(trackRatingCsvfilePath)) {
+        trackRatings = loadTracksFromCsv(trackRatingCsvfilePath, false);
+    }
+    console.log(`Loaded ${trackRatings.length} ranked tracks from CSV.`);
+
+  if (seriesSearch || submitter) {
+    let matches = allTracks
+    if (seriesSearch) { 
+    // filter by series if requested
+    const seriesFuse = new Fuse(allTracks, { keys: ["Source"], threshold: 0.2 });
+    matches = seriesSearch
+      ? seriesFuse.search(seriesSearch).map((r) => r.item)
+      : matches;
+    }
+
+    // then filter by year if requested
+    if (submitter) {
+      const submitterFuse = new Fuse(matches, { keys: ["Nominator"], threshold: 0.2 });
+      matches = submitter
+        ? submitterFuse.search(submitter).map((r) => r.item)
+        : matches;
+
+      if (matches.length === 0) {
+        return await interaction.editReply({
+          content: `No tracks could be found with selected options.`,
+          embeds: [],
+          compontens: [],
+          ephemeral: !makePublic,
+        });
+      }
+    }
+
+    if (matches.length === 0) {
+      return await interaction.editReply({
+        content: seriesSearch
+          ? `No results found for series "${seriesSearch}" with selected options".`
+          : "Could not find any tracks with selected options.",
+        embeds: [],
+        compontens: [],
+        ephemeral: !makePublic,
+      });
+    }
+
+    for (const track of matches) {
+      const ratingEntry = findRatingEntry(trackRatings, track, null);
+
+      if (ratingEntry) {
+        track["Count"] = ratingEntry["Count"];
+        track["Average"] = ratingEntry["Average"];
+        track["StandardDeviation"] = ratingEntry["Std Dev"];
+      } else {
+        console.warn(`No rating entry for track ID ${track["ID"]}`);
+      }
+    }
+
+    // paginate or list
+    await paginateSeriesResults(
+      interaction,
+      matches,
+      seriesSearch,
+      makePublic,
+      submitter
+    );
+    return;
+  } 
+
+  let chosenTrack = null;
+  if (inputNum !== null) {
+    const bvgmKey = Object.keys(allTracks[0]).find((k) =>
+      k.toLowerCase().startsWith("id")
+    );
+    if (!bvgmKey) {
+      return await interaction.editReply({
+        content: `Track with ID number ${inputNum} does not exist.`,
+        embeds: [],
+        compontens: [],
+        ephemeral: !makePublic,
+      });
+    }
+    chosenTrack = allTracks.find((r) => parseInt(r[bvgmKey], 10) === inputNum);
+    if (!chosenTrack) {
+      return await interaction.editReply({
+        content: `No track found with track number ${inputNum}.`,
+        embeds: [],
+        compontens: [],
+        ephemeral: !makePublic,
+      });
+    }
+  } else {
+    const validTracks = allTracks.filter((r) => r["URL"]);
+    chosenTrack = validTracks[Math.floor(Math.random() * validTracks.length)];
+  }
+
+  if (!chosenTrack) {
+    return await interaction.editReply({
+      content: "Could not find a track to show with selected options.",
+      embeds: [],
+      compontens: [],
+      ephemeral: !makePublic,
+    });
+  }
+
+  const ratingEntry = findRatingEntry(trackRatings, chosenTrack, inputNum);
+
+  if (ratingEntry) {
+    chosenTrack["Count"] = ratingEntry["Count"];
+    chosenTrack["Average"] = ratingEntry["Average"];
+    chosenTrack["StandardDeviation"] = ratingEntry["Std Dev"];
+  }
+
+  return await sendEmbed(
+    interaction,
+    chosenTrack,
+    makePublic,
+    useEditReply
+  );
+}
+
+// Builds the embed
+function buildEmbedForTrack(track) {
+  const title = `${track["Source"] || "Unknown Game"} – ${track["Song"] || "Unknown Track"}`;
+
+  const embed = new EmbedBuilder()
+    .setColor(parseInt("FD3DB5", 16))
+    .setTitle(title)
+    .setURL(track["URL"] || null)
+    .setAuthor({
+      name: "Submission #" + track["ID"] || "???",
+      iconURL: "https://cdn.discordapp.com/attachments/1432140713306488974/1439057572039495720/Bot_icon2.png?ex=691f110d&is=691dbf8d&hm=42bb22bb0963dc5067e38532eb7fe7078c7f92b776867720277888a89963053d&",
+    });
+
+  if (track["URL"]) {
+    embed.setThumbnail(
+      `https://img.youtube.com/vi/${extractVideoId(track["URL"])}/0.jpg`
+    );
+  }
+
+  if (track["Nominator"]) {
+    embed.addFields({
+      name: "Nominator",
+      value: track["Nominator"],
+      inline: false,
+    });
+  }
+
+  if (track["Count"] && track["Count"] !== "0") {
+    embed.addFields({
+      name: "Rank Tally",
+      value: track["Count"] || "Unknown",
+      inline: true,
+    });
+  }
+  if (track["Average"]) {
+    embed.addFields({
+      name: "Average Rating",
+      value: "||" + track["Average"] + "||" || "Unknown",
+      inline: true,
+    });
+  }
+
+  if (track["StandardDeviation"]) {
+    embed.addFields({
+      name: "Standard Deviation",
+      value: "||" + track["StandardDeviation"] + "||" || "Unknown",
+      inline: true,
+    });
+  }
+
+  if (track["URL"]) {
+    embed.addFields({
+      name: "Youtube Link",
+      value: track["URL"],
+      inline: false,
+    });
+  }
+
+  const footerText = "Rate the VGM Project";
+  embed.setFooter({
+    text: footerText,
+    iconURL:
+      "http://91.99.239.6/files/suzie/kirbHead.png",
+  });
+
+  return embed;
+}
+
+// YouTube ID extractor
+function extractVideoId(url) {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+  return match ? match[1] : null;
+}
+
+// Load contributor metadata
+function getContributorMap() {
+  const contributors = {};
+  try {
+    const fileData = fs.readFileSync(contributorCsvPath, "utf8");
+    const lines = fileData.split(/\r?\n/);
+    if (lines.length < 2) return contributors;
+
+    const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
+    const seriesNameIdx = headers.findIndex(
+      (h) => h.toLowerCase() === "series name"
+    );
+    const userColorIdx = headers.findIndex(
+      (h) => h.toLowerCase() === "user color"
+    );
+    const userNameIdx = headers.findIndex(
+      (h) => h.toLowerCase() === "user name"
+    );
+    const worksheetIdIdx = headers.findIndex(
+      (h) => h.toLowerCase() === "worksheet id"
+    );
+    const iconUrlIdx = headers.findIndex((h) => h.toLowerCase() === "icon url");
+
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(",");
+      if (row.length <= Math.max(seriesNameIdx, worksheetIdIdx)) continue;
+
+      const seriesName = row[seriesNameIdx]?.trim().replace(/"/g, "");
+      const userColor = row[userColorIdx]?.trim().replace(/"/g, "");
+      const userName = row[userNameIdx]?.trim().replace(/"/g, "");
+      const worksheetId = row[worksheetIdIdx]?.trim().replace(/"/g, "");
+      const iconUrl =
+        row[iconUrlIdx]?.trim().replace(/"/g, "") || DEFAULT_ICON_URL;
+
+      if (worksheetId && userName) {
+        contributors[userName] = {
+          userName,
+          worksheetId,
+          seriesName,
+          userColor,
+          iconUrl,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Error reading contributorVgm.csv:", err);
+  }
+  return contributors;
+}
+
+async function sendEmbed(
+  interaction,
+  track,
+  makePublic,
+  useEditReply
+) {
+  const embed = buildEmbedForTrack(track);
+  const payload = {
+    content: "", // Clear the original message content
+    embeds: [embed],
+    components: [], // Remove dropdown or buttons
+    ephemeral: !makePublic,
+  };
+
+  if (useEditReply) {
+    return await interaction.editReply(payload);
+  } else {
+    return await interaction.followUp(payload);
+  }
+}
+
+async function paginateSeriesResults(
+  interaction,
+  matches,
+  seriesSearch,
+  makePublic,
+  submitter
+) {
+  // Sort entries
+  matches.sort((a, b) => {
+    const aGame = (a["Source"] || "").toLowerCase();
+    const bGame = (b["Source"] || "").toLowerCase();
+    const cmp = aGame.localeCompare(bGame);
+    if (cmp !== 0) return cmp;
+    return (a["Song"] || "").localeCompare(b["Song"] || "");
+  });
+
+  let page = 0;
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(matches.length / itemsPerPage);
+
+  const generateEmbed = (page) => {
+    const start = page * itemsPerPage;
+    const slice = matches.slice(start, start + itemsPerPage);
+    console.log(slice);
+    const lines = slice.map((t, i) => {
+      const idx = start + i + 1;
+      const url = t["URL"];
+      const title = t["Song"] || "Unknown";
+      const game = t["Source"] || "Unknown Game";
+      const who = t["Nominator"] || "???";;
+      const ratingInfo = formatRatingInfo(t);
+      return `${idx}. ${url ? `[${title}](${url})` : title} – ${game} | ${who}${ratingInfo}`;
+    });
+
+    const headerParts = [];
+    if (submitter)
+      headerParts.push(submitter);
+    if (seriesSearch) headerParts.push(seriesSearch);
+    const title = `🎵 Results for ${headerParts.join(" – ")}`;
+
+    return new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(
+        "────────────────────────────\n" +
+          lines.join("\n") +
+          "\n────────────────────────────"
+      )
+      .setColor(0x5865f2)
+      .setFooter({
+        text:
+          `Page ${page + 1}/${totalPages} - ${matches.length} entries`,
+      });
+  };
+
+  // Build controls: Prev, Next and Page selector
+  const prevBtn = new ButtonBuilder()
+    .setCustomId("prev_page")
+    .setEmoji("⬅️")
+    .setStyle("Primary")
+    .setDisabled(page === 0);
+
+  const nextBtn = new ButtonBuilder()
+    .setCustomId("next_page")
+    .setEmoji("➡️")
+    .setStyle("Primary")
+    .setDisabled(page >= totalPages - 1);
+
+  const pageOptions = Array.from({ length: totalPages }, (_, i) => ({
+    label: `Page ${i + 1}`,
+    value: String(i),
+    default: i === page,
+  }));
+  const pageSelect = new StringSelectMenuBuilder()
+    .setCustomId("jump_page")
+    .setPlaceholder("Select page…")
+    .addOptions(pageOptions);
+
+  const controlsRow1 = new ActionRowBuilder().addComponents(pageSelect);
+  const controlsRow2 = new ActionRowBuilder().addComponents(prevBtn, nextBtn);
+
+  // Send initial
+  const components = totalPages > 1 ? [controlsRow1, controlsRow2] : [];
+
+  const message = await interaction.editReply({
+    content: "",
+    embeds: [generateEmbed(page)],
+    components: components,
+    ephemeral: !makePublic,
+  });
+
+  const collector = message.createMessageComponentCollector({ time: 120000 });
+
+  collector.on("collect", async (i) => {
+    if (i.user.id !== interaction.user.id) {
+      return i.reply({ content: "Not for you!", ephemeral: true });
+    }
+
+    // Prev / Next
+    if (i.customId === "prev_page" && page > 0) {
+      page--;
+    }
+    if (i.customId === "next_page" && page < totalPages - 1) {
+      page++;
+    }
+
+    // Jump via dropdown
+    if (i.customId === "jump_page") {
+      page = parseInt(i.values[0], 10);
+    }
+
+    // Update buttons’ disabled state and default option
+    controlsRow2.components[0].setDisabled(page === 0);
+    controlsRow2.components[1].setDisabled(page === totalPages - 1);
+    controlsRow1.components[0].setOptions(
+      pageOptions.map((opt, idx) => ({ ...opt, default: idx === page }))
+    );
+
+    await i.update({
+      embeds: [generateEmbed(page)],
+      components: [controlsRow1, controlsRow2],
+    });
+  });
+
+  collector.on("end", () => {
+    if (message.editable) {
+      message.edit({ components: [] }).catch(() => {});
+    }
+  });
+}
+
+function formatRatingInfo(track) {
+  const parts = [];
+  if (track["Count"] && track["Count"] !== "0") {
+    parts.push(`Tally: ${track["Count"]}`);
+  }
+  if (track["Average"]) {
+    parts.push(`Avg: ${track["Average"]}`);
+  }
+  if (track["StandardDeviation"]) {
+    parts.push(`StdDev: ${track["StandardDeviation"]}`);
+  }
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
+// Loads and parses CSV safely
+function loadTracksFromCsv(filePath, needsFilter) {
+  console.log(`Loading ranked tracks from CSV at: ${filePath}`);
+  const csvData = fs.readFileSync(filePath, "utf8");
+  const { data, errors, meta } = Papa.parse(csvData, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+    transformHeader: (header) => header.trim(),
+  });
+
+  // Manually check for duplicate headers
+  const seen = new Set();
+  for (const field of meta.fields) {
+    if (seen.has(field)) {
+      throw new Error(`Duplicate header detected: ${field}`);
+    }
+    seen.add(field);
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`CSV parsing error: ${errors[0].message}`);
+  }
+
+  return needsFilter ?  data.filter(
+    (row) => row["Source"] && row["Song"] && row["URL"] 
+  ) : data;
+}
+
+function findRatingEntry(trackRatings, track, inputNum) {
+  if (!trackRatings || trackRatings.length === 0) return null;
+
+  const targetIds = new Set();
+  if (inputNum !== null && inputNum !== undefined) {
+    targetIds.add(String(inputNum).trim());
+  }
+
+  const trackId = getTrackIdValue(track);
+  if (trackId) targetIds.add(trackId);
+
+  if (targetIds.size === 0) return null;
+
+  const ratingKeys = Object.keys(trackRatings[0] || {});
+  const candidateKeys = ratingKeys.filter((key) => {
+    const lower = key.toLowerCase();
+    return (
+      lower === "id" ||
+      lower.endsWith("id") ||
+      lower.includes(" id") ||
+      lower.includes("id ") ||
+      lower.includes("number") ||
+      lower === "#" ||
+      lower === "no"
+    );
+  });
+
+  if (candidateKeys.length === 0) return null;
+
+  return trackRatings.find((entry) =>
+    candidateKeys.some((key) => {
+      const value = entry[key];
+      if (value === undefined || value === null) return false;
+      return targetIds.has(String(value).trim());
+    })
+  );
+}
+
+function getTrackIdValue(track) {
+  if (!track) return null;
+  const keys = Object.keys(track);
+  const idKey = keys.find((k) => k.toLowerCase().startsWith("id"));
+  if (idKey && track[idKey]) return String(track[idKey]).trim();
+  const numberKey = keys.find((k) => k.toLowerCase().includes("number"));
+  if (numberKey && track[numberKey]) return String(track[numberKey]).trim();
+  return null;
+}
+
+const tracksCsvPath = path.join(archiveFolder, "RtVGMPrevious.csv");
+let tracksCache = {
+  mtimeMs: 0,
+  tracks: [],
+};
+
+function getTracksForAutocomplete() {
+  if (!fs.existsSync(tracksCsvPath)) return [];
+
+  let stat;
+  try {
+    stat = fs.statSync(tracksCsvPath);
+  } catch (err) {
+    console.warn("Unable to stat submitter CSV:", err);
+    return [];
+  }
+
+  if (stat.mtimeMs !== tracksCache.mtimeMs) {
+    tracksCache = {
+      mtimeMs: stat.mtimeMs,
+      tracks: loadTracksFromCsv(tracksCsvPath, true),
+    };
+  }
+
+  return tracksCache.tracks;
+}
+
+function getSubmitterNames() {
+  const tracks = getTracksForAutocomplete();
+  const unique = new Set();
+  for (const track of tracks) {
+    if (track["Nominator"]) unique.add(String(track["Nominator"]).trim());
+  }
+  return Array.from(unique)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function getSeriesNames() {
+  const tracks = getTracksForAutocomplete();
+  const unique = new Set();
+  for (const track of tracks) {
+    if (track["Source"]) unique.add(String(track["Source"]).trim());
+  }
+  return Array.from(unique)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}

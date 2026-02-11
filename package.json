@@ -1,0 +1,54 @@
+{
+  "name": "Rate-VGM-Bot",
+  "version": "0.1.0",
+  "description": "A simple Node app built on fastify, instantly up and running. Built to be remixed on Glitch.com.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "axios": "^1.3.4",
+    "body-parser": "^1.19.0",
+    "brackets-json-db": "1.0.2",
+    "brackets-memory-db": "1.0.4",
+    "canvas": "^2.11.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cron": "^2.2.0",
+    "csv-parse": "^5.3.6",
+    "csv-parser": "3.0.0",
+    "discord.js": "^14.8.0",
+    "dotenv": "^17.2.1",
+    "exceljs": "4.3.0",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "file-type": "18.5.0",
+    "fuse.js": "^7.1.0",
+    "get-pixels": "^3.3.3",
+    "gif-encoder-2": "^1.0.5",
+    "googleapis": "^100.0.0",
+    "handlebars": "^4.7.7",
+    "jquery": "^3.6.3",
+    "lowdb": "1.x",
+    "merge-descriptors": "^2.0.0",
+    "opusscript": "^0.1.1",
+    "papaparse": "^5.5.2",
+    "qs": "6.11.2",
+    "request": "2.88.2",
+    "request-promise": "^4.2.6"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "url": "https://glitch.com/edit/#!/glitch-hello-node"
+  },
+  "license": "MIT",
+  "keywords": [
+    "node",
+    "discord",
+    "glitch",
+    "express",
+    "lowdb"
+  ]
+}
