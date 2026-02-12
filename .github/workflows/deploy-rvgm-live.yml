@@ -2,7 +2,7 @@ name: Deploy RVGM-live to Hetzner
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch: {}
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
 
             APP_DIR="/home/botuser/bots/RVGM-live"
             REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git" 
-            BRANCH="master"
+            BRANCH="main"
             PROC="rvgm-live"
 
             PARENT_DIR="$(dirname "$APP_DIR")"
