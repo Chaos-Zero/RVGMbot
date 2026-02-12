@@ -2,7 +2,7 @@ name: Deploy RVGM-live to Hetzner
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch: {}
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
 
             APP_DIR="/home/botuser/bots/RVGM-live"
             REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git" 
-            BRANCH="main"
+            BRANCH="master"
             PROC="rvgm-live"
 
             PARENT_DIR="$(dirname "$APP_DIR")"
@@ -131,3 +131,27 @@ jobs:
             else
               echo "→ No dependency changes detected; skipping npm install"
             fi
+
+            echo "[5/6] Reload pm2 process: $PROC via bash -lc"
+            bash -lc '
+              APP_DIR="'"$APP_DIR"'"
+              PROC="'"$PROC"'"
+
+              cd "$APP_DIR" || {
+                echo "[warning] (pm2) could not cd to $APP_DIR; skipping reload" >&2
+                exit 0
+              }
+
+              if ! command -v pm2 >/dev/null 2>&1; then
+                echo "[warning] pm2 not found in login shell; skipping reload" >&2
+                exit 0
+              fi
+
+              echo "[info] Using pm2 at: $(command -v pm2)"
+              pm2 reload "$PROC" || {
+                echo "[warning] pm2 reload \"$PROC\" failed; trying pm2 start" >&2
+                pm2 start ecosystem.config.js --only "$PROC" --update-env || echo "[warning] pm2 start \"$PROC\" also failed" >&2
+              }
+              pm2 save || echo "[warning] pm2 save failed" >&2
+              pm2 list || echo "[warning] pm2 list failed" >&2
+            '
