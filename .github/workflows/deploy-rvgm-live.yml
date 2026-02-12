@@ -2,7 +2,7 @@ name: Deploy RVGM-live to Hetzner
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch: {}
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
 
             APP_DIR="/home/botuser/bots/RVGM-live"
             REPO_URL="https://github.com/Chaos-Zero/RVGMbot.git" 
-            BRANCH="master"
+            BRANCH="main"
             PROC="rvgm-live"
 
             PARENT_DIR="$(dirname "$APP_DIR")"
@@ -45,30 +45,57 @@ jobs:
             cd "$APP_DIR"
 
             echo "[3/6] Sync to origin/$BRANCH"
-            git fetch --all --prune
-            # ensure we are on the right branch locally
-            if ! git rev-parse --abbrev-ref HEAD | grep -qx "$BRANCH"; then
-              git checkout -B "$BRANCH"
+            # If this repo was originally cloned as a single-branch (e.g. master),
+            # origin/$BRANCH may not exist locally. Ensure we fetch the desired branch.
+            git remote set-branches origin "$BRANCH"
+            git fetch origin --prune
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              echo "[warn] origin/$BRANCH not found after initial fetch. Expanding fetch refspec..."
+              git remote set-branches origin "*"
+              git fetch origin --prune
             fi
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              echo "[error] origin/$BRANCH still missing. Check if the branch exists on remote." >&2
+              git branch -r
+              exit 1
+            fi
+
+            # ensure we are on the right branch locally
+            git checkout -B "$BRANCH" "origin/$BRANCH"
             git reset --hard "origin/$BRANCH"
 
             echo "[4/6] Install deps (skip if unchanged)"
-            npm config set fund false
-            npm config set audit false
-            npm config set progress false
-            npm config set fetch-timeout 120000
-            npm config set fetch-retries 2
-            npm config set fetch-retry-maxtimeout 240000
-            export CI=true NO_UPDATE_NOTIFIER=1
-
-            MANIFEST="package-lock.json"
-            [ -f package-lock.json ] || MANIFEST="package.json"
-            CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
-            LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo '')"
+            MANIFEST=""
+            if [ -f package-lock.json ]; then
+              MANIFEST="package-lock.json"
+            elif [ -f package.json ]; then
+              MANIFEST="package.json"
+            fi
 
             NEED_INSTALL=0
-            [ ! -d node_modules ] && NEED_INSTALL=1
-            [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
+            if [ -n "$MANIFEST" ] && command -v npm >/dev/null 2>&1; then
+              npm config set fund false           >/dev/null 2>&1 || true
+              npm config set audit false          >/dev/null 2>&1 || true
+              npm config set progress false       >/dev/null 2>&1 || true
+              npm config set fetch-timeout 120000 >/dev/null 2>&1 || true
+              npm config set fetch-retries 2      >/dev/null 2>&1 || true
+              npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || true
+              export CI=true NO_UPDATE_NOTIFIER=1
+
+              CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
+              LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo '')"
+
+              [ ! -d node_modules ] && NEED_INSTALL=1
+              [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
+            else
+              if [ -z "$MANIFEST" ]; then
+                echo "[info] No package-lock.json or package.json; skipping npm install"
+              else
+                echo "[warning] npm not found; skipping dependency install" >&2
+              fi
+            fi
 
             if [ "$NEED_INSTALL" -eq 1 ]; then
               echo "→ Installing deps with npm (manifest: $MANIFEST)"
