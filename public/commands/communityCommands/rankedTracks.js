@@ -153,13 +153,10 @@ async function handleTrackFetch(
     console.log(`Loaded ${trackRatings.length} ranked tracks from CSV.`);
 
   if (seriesSearch || submitter) {
-    let matches = allTracks
-    if (seriesSearch) { 
-    // filter by series if requested
-    const seriesFuse = new Fuse(allTracks, { keys: ["Source"], threshold: 0.2 });
-    matches = seriesSearch
-      ? seriesFuse.search(seriesSearch).map((r) => r.item)
-      : matches;
+    let matches = allTracks;
+    if (seriesSearch) {
+      // filter by series if requested
+      matches = filterTracksBySeries(allTracks, seriesSearch);
     }
 
     // then filter by year if requested
@@ -581,6 +578,24 @@ function loadTracksFromCsv(filePath, needsFilter) {
   return needsFilter ?  data.filter(
     (row) => row["Source"] && row["Song"] && row["URL"] 
   ) : data;
+}
+
+function filterTracksBySeries(tracks, seriesSearch) {
+  const normalizedQuery = normalizeSeriesName(seriesSearch);
+  const exactMatches = tracks.filter(
+    (track) => normalizeSeriesName(track["Source"]) === normalizedQuery
+  );
+
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+
+  const fuse = new Fuse(tracks, { keys: ["Source"], threshold: 0.2 });
+  return fuse.search(seriesSearch).map((r) => r.item);
+}
+
+function normalizeSeriesName(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function findRatingEntry(trackRatings, track, inputNum) {

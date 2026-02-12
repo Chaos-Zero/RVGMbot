@@ -123,9 +123,8 @@ async function handleTrackFetch(
   }
 
   // filter by series if requested
-  const fuse = new Fuse(allTracks, { keys: ["Source"], threshold: 0.2 });
   let matches = seriesSearch
-    ? fuse.search(seriesSearch).map((r) => r.item)
+    ? filterTracksBySeries(allTracks, seriesSearch)
     : allTracks;
 
   // filter by submitter if requested
@@ -367,6 +366,24 @@ function loadTracksFromCsv(filePath) {
   return data.filter(
     (row) => row["Source"] && row["Song"] && row["URL"]
   );
+}
+
+function filterTracksBySeries(tracks, seriesSearch) {
+  const normalizedQuery = normalizeSeriesName(seriesSearch);
+  const exactMatches = tracks.filter(
+    (track) => normalizeSeriesName(track["Source"]) === normalizedQuery
+  );
+
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+
+  const fuse = new Fuse(tracks, { keys: ["Source"], threshold: 0.2 });
+  return fuse.search(seriesSearch).map((r) => r.item);
+}
+
+function normalizeSeriesName(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 let tracksCache = {
