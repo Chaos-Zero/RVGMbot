@@ -45,11 +45,25 @@ jobs:
             cd "$APP_DIR"
 
             echo "[3/6] Sync to origin/$BRANCH"
-            git fetch --all --prune
-            # ensure we are on the right branch locally
-            if ! git rev-parse --abbrev-ref HEAD | grep -qx "$BRANCH"; then
-              git checkout -B "$BRANCH"
+            # If this repo was originally cloned as a single-branch (e.g. master),
+            # origin/$BRANCH may not exist locally. Ensure we fetch the desired branch.
+            git remote set-branches origin "$BRANCH"
+            git fetch origin --prune
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              echo "[warn] origin/$BRANCH not found after initial fetch. Expanding fetch refspec..."
+              git remote set-branches origin "*"
+              git fetch origin --prune
             fi
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              echo "[error] origin/$BRANCH still missing. Check if the branch exists on remote." >&2
+              git branch -r
+              exit 1
+            fi
+
+            # ensure we are on the right branch locally
+            git checkout -B "$BRANCH" "origin/$BRANCH"
             git reset --hard "origin/$BRANCH"
 
             echo "[4/6] Install deps (skip if unchanged)"

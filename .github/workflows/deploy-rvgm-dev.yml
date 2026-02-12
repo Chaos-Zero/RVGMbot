@@ -48,8 +48,23 @@ jobs:
             }
 
             echo "[3/5] Sync to origin/$BRANCH (best effort)"
-            git fetch --all --prune || echo "[warning] git fetch failed; using existing checkout" >&2
-            git reset --hard "origin/$BRANCH" || echo "[warning] git reset --hard origin/$BRANCH failed; keeping current working tree" >&2
+            # If this repo was originally cloned as a single-branch (e.g. master),
+            # origin/$BRANCH may not exist locally. Ensure we fetch the desired branch.
+            git remote set-branches origin "$BRANCH" >/dev/null 2>&1 || true
+            git fetch origin --prune || echo "[warning] git fetch failed; using existing checkout" >&2
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              echo "[warning] origin/$BRANCH not found after initial fetch. Expanding fetch refspec..." >&2
+              git remote set-branches origin "*" >/dev/null 2>&1 || true
+              git fetch origin --prune || echo "[warning] git fetch failed; using existing checkout" >&2
+            fi
+
+            if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              git checkout -B "$BRANCH" "origin/$BRANCH" || echo "[warning] git checkout -B $BRANCH origin/$BRANCH failed; keeping current branch" >&2
+              git reset --hard "origin/$BRANCH" || echo "[warning] git reset --hard origin/$BRANCH failed; keeping current working tree" >&2
+            else
+              echo "[warning] origin/$BRANCH still missing; keeping current working tree" >&2
+            fi
 
             echo "[4/5] Install deps (best effort)"
             MANIFEST=""
