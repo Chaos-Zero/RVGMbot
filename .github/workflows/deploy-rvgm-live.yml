@@ -84,11 +84,23 @@ jobs:
               npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || true
               export CI=true NO_UPDATE_NOTIFIER=1
 
-              CUR_HASH="$(sha256sum "$MANIFEST" | awk '{print $1}')"
-              LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo '')"
+              HASH_CMD=""
+              if command -v sha256sum >/dev/null 2>&1; then
+                HASH_CMD="sha256sum"
+              elif command -v shasum >/dev/null 2>&1; then
+                HASH_CMD="shasum -a 256"
+              fi
 
-              [ ! -d node_modules ] && NEED_INSTALL=1
-              [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
+              if [ -n "$HASH_CMD" ]; then
+                CUR_HASH="$($HASH_CMD "$MANIFEST" 2>/dev/null | awk '{print $1}' || true)"
+                LAST_HASH="$(cat .last_deps_hash 2>/dev/null || echo '')"
+
+                [ ! -d node_modules ] && NEED_INSTALL=1
+                [ -n "$CUR_HASH" ] && [ "$CUR_HASH" != "$LAST_HASH" ] && NEED_INSTALL=1
+              else
+                echo "[warning] No sha256sum/shasum available; installing deps only if node_modules is missing" >&2
+                [ ! -d node_modules ] && NEED_INSTALL=1
+              fi
             else
               if [ -z "$MANIFEST" ]; then
                 echo "[info] No package-lock.json or package.json; skipping npm install"
